@@ -6,6 +6,9 @@
   (:documentation "Functionality common to all plotting.  The plot class is defined here, with each backend subclassing it.  Functions for interacting with display systems, like the browser or Electron/Webview are also defined here")
   (:export
    #:plot
+   #:representation
+   #:mime-representation
+   #:server-plot-id
    #:plot-data
    #:plot-spec
    #:plot-name

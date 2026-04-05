@@ -26,6 +26,8 @@ report formats with line-breaks instead of printing on a single line."
 (defsuite data-conversion-suite (vega))
 (defsuite encoding-suite (vega))
 (defsuite commands-suite (vega))
+(defsuite representation-suite (vega))
+(defsuite registry-suite (vega))
 
 ;;; Utility: parse JSON string to hash-table for order-independent comparison
 (defun parse-json (json-string)
@@ -46,15 +48,16 @@ report formats with line-breaks instead of printing on a single line."
         when (and (stringp k) (string= k key))
           return v))
 
-;;; Utility: encode a symbol via the Vega symbol encoder to get JSON
-(defun encode-symbol-via-plist (sym)
-  "Encode SYM through Yason with the Vega symbol encoders.
-Returns a JSON string.  Useful for testing encode-symbol-as-metadata
-without calling write-spec."
-  (let ((yason:*symbol-encoder*     #'vega::encode-symbol-as-metadata)
-        (yason:*symbol-key-encoder* #'vega::encode-symbol-as-metadata))
-    (with-output-to-string (s)
-      (yason:encode (list :test sym) s))))
+(defun clear-plot-if-present (name)
+  "Remove NAME from the registry if present."
+  (unregister-plot name)
+  nil)
+
+;;; Utility: encode an object via the public Vega JSON helper
+(defun encode-object-via-vega-helper (object)
+  "Encode OBJECT through the public Vega JSON helper and return a JSON string."
+  (with-output-to-string (s)
+    (vega:encode-object-for-vega object s)))
 
 ;;; Utility: construct a mock gist for editor-url tests.
 ;;; NOTE: Uses internal constructors cl-gists.gist::%make-gist and
@@ -225,6 +228,45 @@ When VERSION is supplied the gist includes a history entry."
     (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
                          (values (gethash "$schema" parsed)))))
 
+(deftest representation-text-matches-print-object (representation-suite)
+  "plot:representation with :text returns the printed plot representation."
+  (let* ((spec '(:mark :bar
+                 :description "Simple bar chart"
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (plot (vega::%defplot 'test-text spec))
+         (expected (with-output-to-string (stream)
+                     (let ((*print-escape* t))
+                       (write plot :stream stream))))
+         (actual (representation plot :text)))
+    (assert-equal expected actual)))
+
+(deftest representation-vega-lite-reuses-write-spec (representation-suite)
+  "plot:representation with :vega-lite returns the same JSON as write-spec."
+  (let* ((spec '(:mark :bar
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (plot (vega::%defplot 'test-vega-lite spec)))
+    (assert-equalp (parse-json (vega::write-spec plot))
+                   (parse-json (representation plot :vega-lite)))))
+
+(deftest mime-representation-includes-text-and-vega-lite (representation-suite)
+  "plot:mime-representation returns text/plain and Vega-Lite MIME payloads."
+  (let* ((spec '(:mark :bar
+                 :description "Simple bar chart"
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (plot (vega::%defplot 'test-mime spec))
+         (bundle (mime-representation plot))
+         (data (cdr bundle))
+         (expected-text (representation plot :text))
+         (expected-spec (parse-json (representation plot :vega-lite))))
+    (assert-equal expected-text (getf-string data "text/plain"))
+    (assert-equalp expected-spec
+                   (getf-string data "application/vnd.vegalite.v6+json"))
+    (assert-equalp expected-spec
+                   (getf-string data "application/vnd.vegalite.v4+json"))))
+
 
 ;;;
 ;;; editor-url tests
@@ -249,27 +291,27 @@ When VERSION is supplied the gist includes a history entry."
 
 (deftest encode-normal-keyword (encoding-suite)
   "Normal keywords encode as lowercase strings."
-  (let ((json (encode-symbol-via-plist :bar)))
+  (let ((json (encode-object-via-vega-helper (list :test :bar))))
     (assert-true (search "\"bar\"" json))))
 
 (deftest encode-camel-case (encoding-suite)
   "Hyphenated keywords encode as camelCase."
-  (let ((json (encode-symbol-via-plist :inner-radius)))
+  (let ((json (encode-object-via-vega-helper (list :test :inner-radius))))
     (assert-true (search "\"innerRadius\"" json))))
 
 (deftest encode-camel-case-x-offset (encoding-suite)
   "x-offset encodes as xOffset via camelCase."
-  (let ((json (encode-symbol-via-plist :x-offset)))
+  (let ((json (encode-object-via-vega-helper (list :test :x-offset))))
     (assert-true (search "\"xOffset\"" json))))
 
 (deftest encode-na-as-null (encoding-suite)
   "The symbol NA encodes as JSON null."
-  (let ((json (encode-symbol-via-plist 'na)))
+  (let ((json (encode-object-via-vega-helper (list :test 'na))))
     (assert-true (search "null" json))))
 
 (deftest encode-false-as-false (encoding-suite)
   "The symbol FALSE encodes as JSON false."
-  (let ((json (encode-symbol-via-plist 'false)))
+  (let ((json (encode-object-via-vega-helper (list :test 'false))))
     (assert-true (search "false" json))))
 
 (deftest encode-symbol-with-type-metadata (encoding-suite)
@@ -277,7 +319,7 @@ When VERSION is supplied the gist includes a history entry."
   (let ((sym (make-symbol "TEMPERATURE")))
     (setf (get sym :type) :double-float)
     (unwind-protect
-         (let ((json (encode-symbol-via-plist sym)))
+         (let ((json (encode-object-via-vega-helper (list :test sym))))
            (assert-true (search "\"quantitative\"" json))
            (assert-true (search "\"temperature\"" json)))
       (remprop sym :type))))
@@ -288,7 +330,7 @@ When VERSION is supplied the gist includes a history entry."
     (setf (get sym :type) :double-float)
     (setf (get sym :label) "Speed (km/h)")
     (unwind-protect
-         (let ((json (encode-symbol-via-plist sym)))
+         (let ((json (encode-object-via-vega-helper (list :test sym))))
            (assert-true (search "\"quantitative\"" json))
            (assert-true (search "\"Speed (km/h)\"" json)))
       (remprop sym :type)
@@ -299,9 +341,17 @@ When VERSION is supplied the gist includes a history entry."
   (let ((sym (make-symbol "WEIGHT")))
     (setf (get sym :unit) "kg")
     (unwind-protect
-         (let ((json (encode-symbol-via-plist sym)))
+         (let ((json (encode-object-via-vega-helper (list :test sym))))
            (assert-true (search "\"kg\"" json)))
       (remprop sym :unit))))
+
+(deftest encode-object-for-vega-na-data-frame (encoding-suite)
+  "encode-object-for-vega preserves :NA as JSON null for data-frame output."
+  (let* ((df (df:make-df '(:name :value)
+                         (list #("A" "B")
+                               (make-array 2 :initial-contents '(1 :na)))))
+         (json (encode-object-via-vega-helper df)))
+    (assert-true (search "null" json))))
 
 
 ;;;
@@ -354,6 +404,95 @@ When VERSION is supplied the gist includes a history entry."
     (assert-equalp data (plot-data p))
     (assert-equalp spec (plot-spec p))))
 
+(deftest make-plot-from-spec-unnamed-construction (commands-suite)
+  "make-plot-from-spec builds an unnamed plot and separates top-level data."
+  (let* ((spec '(:mark :bar
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (p (make-plot-from-spec spec)))
+    (assert-false (plot-name p))
+    (assert-equalp '(:values #((:a "A" :b 1))) (plot-data p))
+    (assert-equal :bar (getf (plot-spec p) :mark))))
+
+(deftest make-plot-from-spec-inserts-default-schema (commands-suite)
+  "make-plot-from-spec inserts the default schema when absent."
+  (let* ((spec '(:mark :bar
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (p (make-plot-from-spec spec)))
+    (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
+                  (getf-string (plot-spec p) "$schema"))))
+
+(deftest make-plot-from-spec-preserves-explicit-schema (commands-suite)
+  "make-plot-from-spec preserves an explicit schema."
+  (let* ((schema "https://example.com/custom-schema.json")
+         (spec `("$schema" ,schema
+                 :mark :bar
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (p (make-plot-from-spec spec)))
+    (assert-equal schema
+                  (getf-string (plot-spec p) "$schema"))))
+
+(deftest register-plot-adds-normalized-name (registry-suite)
+  "register-plot stores a plot by normalized name and updates plot-name."
+  (clear-plot-if-present "REGISTRY-TEST")
+  (let* ((plot (make-plot-from-spec '(:mark :bar) :name "registry-test")))
+    (unwind-protect
+         (progn
+           (assert-true (eq plot (register-plot plot)))
+           (assert-equal "REGISTRY-TEST" (plot-name plot))
+           (assert-true (eq plot (find-plot "registry-test")))
+           (assert-true (eq plot (find-plot 'registry-test))))
+      (clear-plot-if-present "REGISTRY-TEST"))))
+
+(deftest list-plots-returns-sorted-registered-names (registry-suite)
+  "list-plots returns sorted names from the registry."
+  (clear-plot-if-present "ALPHA-PLOT")
+  (clear-plot-if-present "BETA-PLOT")
+  (let ((alpha (make-plot-from-spec '(:mark :bar) :name "alpha-plot"))
+        (beta (make-plot-from-spec '(:mark :bar) :name "beta-plot")))
+    (unwind-protect
+         (progn
+           (register-plot beta)
+           (register-plot alpha)
+           (assert-true (member "ALPHA-PLOT" (list-plots) :test #'string=))
+           (assert-true (member "BETA-PLOT" (list-plots) :test #'string=))
+           (assert-equal '("ALPHA-PLOT" "BETA-PLOT")
+                         (remove-if-not (lambda (name)
+                                          (member name '("ALPHA-PLOT" "BETA-PLOT")
+                                                  :test #'string=))
+                                        (list-plots))))
+      (clear-plot-if-present "ALPHA-PLOT")
+      (clear-plot-if-present "BETA-PLOT"))))
+
+(deftest unregister-plot-removes-and-returns-plot (registry-suite)
+  "unregister-plot removes the plot and returns it."
+  (clear-plot-if-present "DELETE-PLOT")
+  (let ((plot (register-plot (make-plot-from-spec '(:mark :bar) :name "delete-plot"))))
+    (assert-true (eq plot (unregister-plot "delete-plot")))
+    (assert-false (find-plot "delete-plot"))))
+
+(deftest defplot-registers-via-runtime-api (registry-suite)
+  "defplot defines a variable and leaves a discoverable registered plot."
+  (let ((sym (intern "RUNTIME-DEFPLOT-TEST" (find-package :vega-tests))))
+    (clear-plot-if-present sym)
+    (when (boundp sym)
+      (makunbound sym))
+    (unwind-protect
+         (progn
+           (eval `(defplot ,sym
+                    (:mark :bar
+                     :data (:values #((:a "A" :b 1)))
+                     :encoding (:x (:field :a) :y (:field :b)))))
+           (assert-true (boundp sym))
+           (assert-true (eq (symbol-value sym) (find-plot sym)))
+           (assert-equal "RUNTIME-DEFPLOT-TEST"
+                         (plot-name (symbol-value sym))))
+      (clear-plot-if-present sym)
+      (when (boundp sym)
+        (makunbound sym)))))
+
 
 ;;;
 ;;; write-spec-suite — additional plot types (Wave 2)
@@ -397,4 +536,3 @@ When VERSION is supplied the gist includes a history entry."
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "area-chart.json"))))
     (assert-equalp expected actual)))
-

@@ -20,6 +20,11 @@
    #:defplot
    #:save-plot
    #:make-plot
+   #:make-plot-from-spec
+   #:register-plot
+   #:find-plot
+   #:list-plots
+   #:unregister-plot
    #:show-plots
    #:write-html
    #:write-spec
@@ -28,6 +33,7 @@
    #:*all-plots*			;global list of plots
    #:plot-to-device
    #:merge-plists			;utility
+   #:encode-object-for-vega
    #:encode-symbol-for-vega		;for meta-data attached to symbols, like a df column name
 
    ;; Data-frame I/O
