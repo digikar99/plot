@@ -8,6 +8,7 @@
    #:plot
    #:representation
    #:mime-representation
+   #:server-plot-id
    #:plot-data
    #:plot-spec
    #:plot-name

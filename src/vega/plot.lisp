@@ -121,6 +121,9 @@ already used by existing Vega specs here."
 (defmethod representation ((p vega-plot) (kind (eql :vega-lite)) &key)
   (write-spec p))
 
+(defmethod plot:server-plot-id ((p vega-plot))
+  (plot:plot-name p))
+
 (defmethod plot:mime-representation ((p vega-plot) &key)
   "Return plot-owned MIME data for notebook/front-end consumers.
 This packages existing representations and does not introduce a second serializer."
