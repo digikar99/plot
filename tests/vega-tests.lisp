@@ -555,6 +555,21 @@ When VERSION is supplied the gist includes a history entry."
          nil)
      (error () t))))
 
+(deftest make-plot-from-spec-signals-deprecation-warning (commands-suite)
+  "make-plot-from-spec signals a deprecation warning that directs callers to explicit MAKE-PLOT :BASE."
+  (let ((warning nil))
+    (handler-bind ((vega::make-plot-from-spec-deprecated-warning
+                     (lambda (condition)
+                       (setf warning condition)
+                       (muffle-warning))))
+      (let ((vega::*make-plot-from-spec-deprecation-warning-issued-p* nil))
+        (make-plot-from-spec '(:mark :bar
+                               :data (:values #((:a "A" :b 1)))
+                               :encoding (:x (:field :a) :y (:field :b))))))
+    (assert-true warning)
+    (assert-true (search "MAKE-PLOT" (string-upcase (princ-to-string warning))))
+    (assert-true (search ":BASE" (string-upcase (princ-to-string warning))))))
+
 (deftest make-plot-from-spec-unnamed-construction (commands-suite)
   "make-plot-from-spec remains an unnamed compatibility wrapper over explicit :base construction."
   (let* ((spec '(:mark :bar

@@ -225,12 +225,28 @@ Prefer explicit MAKE-PLOT :BASE construction for new lower-level code."
     (t
      (%make-plot-from-fragments first rest))))
 
+(define-condition make-plot-from-spec-deprecated-warning (simple-warning)
+  ()
+  (:documentation "Warning signaled when the deprecated MAKE-PLOT-FROM-SPEC compatibility seam is used.")
+  (:report (lambda (condition stream)
+             (declare (ignore condition))
+             (format stream
+                     "MAKE-PLOT-FROM-SPEC is deprecated; prefer MAKE-PLOT with explicit :BASE for new code."))))
+
+(defvar *make-plot-from-spec-deprecation-warning-issued-p* nil
+  "Tracks whether the MAKE-PLOT-FROM-SPEC deprecation warning has already been signaled.")
+
 (defun make-plot-from-spec (spec &key name
                                  (schema "https://vega.github.io/schema/vega-lite/v6.json"))
-  "Compatibility-only public wrapper over explicit MAKE-PLOT :BASE construction.
+  "Deprecated compatibility-only public wrapper over explicit MAKE-PLOT :BASE construction.
 
 Prefer MAKE-PLOT for new construction code. This function remains to preserve
 older spec-oriented call sites while the constructor center is MAKE-PLOT."
+  ;; Start explicit runtime deprecation signaling on this compatibility seam
+  ;; without changing its construction behavior.
+  (unless *make-plot-from-spec-deprecation-warning-issued-p*
+    (setf *make-plot-from-spec-deprecation-warning-issued-p* t)
+    (warn 'make-plot-from-spec-deprecated-warning))
   ;; Preserve the existing SPEC- and SCHEMA-oriented public compatibility seam
   ;; while making MAKE-PLOT the explicit constructor center.
   (unless (%string-key-value spec "$schema")
