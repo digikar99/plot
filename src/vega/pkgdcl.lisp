@@ -19,8 +19,8 @@
    #:plot
    #:defplot
    #:save-plot
-   #:make-plot
-   #:make-plot-from-spec
+   #:make-plot                         ; primary public constructor
+   #:make-plot-from-spec               ; compatibility-only public wrapper
    #:register-plot
    #:find-plot
    #:list-plots

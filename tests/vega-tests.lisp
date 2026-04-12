@@ -527,7 +527,7 @@ When VERSION is supplied the gist includes a history entry."
      (error () t))))
 
 (deftest make-plot-from-spec-unnamed-construction (commands-suite)
-  "make-plot-from-spec builds an unnamed plot and separates top-level data."
+  "make-plot-from-spec remains an unnamed compatibility wrapper over explicit :base construction."
   (let* ((spec '(:mark :bar
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
@@ -537,7 +537,7 @@ When VERSION is supplied the gist includes a history entry."
     (assert-equal :bar (getf (plot-spec p) :mark))))
 
 (deftest make-plot-from-spec-inserts-default-schema (commands-suite)
-  "make-plot-from-spec inserts the default schema when absent."
+  "make-plot-from-spec preserves its schema-oriented compatibility behavior when absent from the base spec."
   (let* ((spec '(:mark :bar
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
@@ -546,7 +546,7 @@ When VERSION is supplied the gist includes a history entry."
                   (getf-string (plot-spec p) "$schema"))))
 
 (deftest make-plot-from-spec-preserves-explicit-schema (commands-suite)
-  "make-plot-from-spec preserves an explicit schema."
+  "make-plot-from-spec preserves an explicit schema while remaining subordinate to MAKE-PLOT."
   (let* ((schema "https://example.com/custom-schema.json")
          (spec `("$schema" ,schema
                  :mark :bar
@@ -570,6 +570,24 @@ When VERSION is supplied the gist includes a history entry."
            (assert-false (find-plot "SPEC-COMPAT")))
       (clear-plot-if-present "SPEC-COMPAT"))))
 
+(deftest make-plot-from-spec-matches-explicit-base-construction (commands-suite)
+  "make-plot-from-spec remains a compatibility wrapper over explicit MAKE-PLOT :BASE construction."
+  (clear-plot-if-present "SPEC-COMPAT-EQUIV")
+  (let* ((template '(:mark :line
+                     :data (:values #((:x 1 :y 2) (:x 2 :y 3)))
+                     :encoding (:x (:field :x) :y (:field :y))))
+         (compat-spec (copy-tree template))
+         (base-spec (copy-tree template))
+         (compat (make-plot-from-spec compat-spec :name "spec-compat-equiv"))
+         (explicit (make-plot :base base-spec :name "spec-compat-equiv")))
+    (unwind-protect
+         (progn
+           (assert-equal (plot-name explicit) (plot-name compat))
+           (assert-equalp (plot-data explicit) (plot-data compat))
+           (assert-equalp (plot-spec explicit) (plot-spec compat))
+           (assert-false (find-plot "SPEC-COMPAT-EQUIV")))
+      (clear-plot-if-present "SPEC-COMPAT-EQUIV"))))
+
 (deftest make-plot-from-spec-schema-argument-remains-compatible (commands-suite)
   "make-plot-from-spec still honors its explicit schema argument while remaining an unregistered compatibility wrapper."
   (clear-plot-if-present "SPEC-COMPAT-SCHEMA")
@@ -584,6 +602,23 @@ When VERSION is supplied the gist includes a history entry."
            (assert-equal schema (getf-string (plot-spec p) "$schema"))
            (assert-false (find-plot "SPEC-COMPAT-SCHEMA")))
       (clear-plot-if-present "SPEC-COMPAT-SCHEMA"))))
+
+(deftest make-plot-from-spec-does-not-display-implicitly (commands-suite)
+  "make-plot-from-spec remains construction-only and does not invoke PLOT:PLOT implicitly."
+  (let ((display-called nil)
+        (original-plot-function (symbol-function 'plot:plot)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'plot:plot)
+                 (lambda (&rest args)
+                   (declare (ignore args))
+                   (setf display-called t)
+                   :display-called))
+           (make-plot-from-spec '(:mark :bar
+                                  :data (:values #((:a "A" :b 1)))
+                                  :encoding (:x (:field :a) :y (:field :b))))
+           (assert-false display-called))
+      (setf (symbol-function 'plot:plot) original-plot-function))))
 
 (deftest register-plot-adds-normalized-name (registry-suite)
   "register-plot stores a plot by normalized name and updates plot-name."

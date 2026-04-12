@@ -221,9 +221,12 @@ Legacy positional low-level compatibility path:
 
 (defun make-plot-from-spec (spec &key name
                                  (schema "https://vega.github.io/schema/vega-lite/v6.json"))
-  "Compatibility constructor over explicit MAKE-PLOT :BASE construction."
-  ;; Preserve the existing SCHEMA compatibility seam while centering public
-  ;; construction on MAKE-PLOT.
+  "Compatibility-only public wrapper over explicit MAKE-PLOT :BASE construction.
+
+Prefer MAKE-PLOT for new construction code. This function remains to preserve
+older spec-oriented call sites while the constructor center is MAKE-PLOT."
+  ;; Preserve the existing SPEC- and SCHEMA-oriented public compatibility seam
+  ;; while making MAKE-PLOT the explicit constructor center.
   (unless (%string-key-value spec "$schema")
     (setf (getf spec "$schema") schema))
   (make-plot :base spec :name name))
