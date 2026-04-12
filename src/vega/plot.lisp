@@ -43,7 +43,7 @@ already used by existing Vega specs here."
           return v))
 
 (defun %legacy-plot-name-designator-p (object)
-  "Return true when OBJECT is accepted by the legacy positional low-level MAKE-PLOT compatibility path."
+  "Return true when OBJECT matches the removed positional low-level MAKE-PLOT entry forms."
   (or (stringp object)
       (and (symbolp object)
            (not (keywordp object)))))
@@ -160,42 +160,6 @@ GG and GEOM helper layers."
                                        (apply #'merge-plists base overlay)
                                        base))))
 
-(define-condition make-plot-legacy-positional-deprecated-warning (simple-warning)
-  ()
-  (:documentation "Warning signaled when a deprecated legacy positional MAKE-PLOT compatibility form is used.")
-  (:report (lambda (condition stream)
-             (declare (ignore condition))
-             (format stream
-                     "Legacy positional MAKE-PLOT forms are deprecated; prefer MAKE-PLOT with explicit :BASE for new lower-level code."))))
-
-(defvar *make-plot-legacy-positional-deprecation-warning-issued-p* nil
-  "Tracks whether the legacy positional MAKE-PLOT deprecation warning has already been signaled.")
-
-(defun %make-plot-from-legacy-positional (name &optional
-                                               data
-                                               (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
-  "Construct a VEGA-PLOT through the deprecated compatibility-only positional low-level path over explicit MAKE-PLOT :BASE construction.
-
-Prefer explicit MAKE-PLOT :BASE construction for new lower-level code.
-This helper preserves the old external slot shape where DATA and SPEC remain
-separate, even though construction now routes through the explicit
-advanced contract."
-  ;; Continue the explicit deprecation arc for compatibility-only positional
-  ;; entry points while preserving their constructor behavior.
-  (unless *make-plot-legacy-positional-deprecation-warning-issued-p*
-    (setf *make-plot-legacy-positional-deprecation-warning-issued-p* t)
-    (warn 'make-plot-legacy-positional-deprecated-warning))
-  (let* ((base (if data
-                   (merge-plists spec `(:data ,data))
-                   spec))
-         (plot (make-plot :base base :name name)))
-    ;; Preserve the legacy public shape exactly: unnormalized NAME, separate
-    ;; DATA slot, and SPEC without synthesized top-level :DATA.
-    (setf (plot-name plot) name
-          (plot-data plot) data
-          (plot-spec plot) spec)
-    plot))
-
 (defun show-plots ()
   "Show all plots in the current environment"
   (loop for i = 0 then (1+ i)
@@ -208,7 +172,7 @@ advanced contract."
 (defgeneric write-spec (plot &key spec-loc data-url data-loc))
 
 (defun make-plot (first &rest rest)
-  "Construct a VEGA-PLOT through the recommended high-level path, the explicit advanced :BASE path, or the legacy positional compatibility path.
+  "Construct a VEGA-PLOT through the recommended high-level path or the explicit advanced :BASE path.
 
 Recommended high-level path:
   (make-plot data fragment &rest fragments)
@@ -220,7 +184,7 @@ Explicit advanced lower-level path for this step:
   (make-plot :base base :overlay overlay-fragments)
   (make-plot :base base :name name :overlay overlay-fragments)
 
-Legacy positional low-level compatibility path:
+Removed positional low-level compatibility forms:
   (make-plot name)
   (make-plot name data)
   (make-plot name data spec)
@@ -229,9 +193,8 @@ The high-level path is fragment-oriented: DATA is wrapped as inline values and
 the supplied fragments are merged into the resulting Vega-Lite specification.
 Construction is explicit only: MAKE-PLOT does not display or register plots.
 
-The positional low-level forms are preserved for compatibility only and are
-deprecated in favor of explicit MAKE-PLOT :BASE construction.
-Prefer explicit MAKE-PLOT :BASE construction for new lower-level code."
+The positional low-level forms have been removed. Use explicit MAKE-PLOT :BASE
+construction for lower-level authored plots."
   (cond
     ((keywordp first)
      (case first
@@ -239,13 +202,7 @@ Prefer explicit MAKE-PLOT :BASE construction for new lower-level code."
        (otherwise
         (error "Unsupported MAKE-PLOT keyword contract ~S in this step." first))))
     ((%legacy-plot-name-designator-p first)
-     ;; Preserve the old positional low-level entry points as a compatibility
-     ;; seam, but keep the explicit :BASE contract as the advanced constructor.
-     (destructuring-bind (&optional
-                          data
-                          (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
-         rest
-       (%make-plot-from-legacy-positional first data spec)))
+     (error "Legacy positional MAKE-PLOT forms have been removed; use MAKE-PLOT :BASE for lower-level construction, or pass data first for the high-level authoring path."))
     (t
      (%make-plot-from-fragments first rest))))
 

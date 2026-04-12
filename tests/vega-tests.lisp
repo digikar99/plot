@@ -393,86 +393,25 @@ When VERSION is supplied the gist includes a history entry."
 ;;; commands-suite — make-plot constructor
 ;;;
 
-(deftest make-plot-name-only-remains-legacy-compatible (commands-suite)
-  "Legacy positional make-plot with NAME only remains a compatibility path and does not auto-register."
-  (clear-plot-if-present "TEST-DEFAULT")
-  (let ((p (make-plot "test-default")))
-    (unwind-protect
-         (progn
-           (assert-equal "test-default" (plot-name p))
-           (assert-false (plot-data p))
-           ;; Default spec has string key "$schema"; use getf-string
-           (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
-                         (getf-string (plot-spec p) "$schema"))
-           (assert-false (find-plot "TEST-DEFAULT")))
-      (clear-plot-if-present "TEST-DEFAULT"))))
-
-(deftest make-plot-with-data-and-spec-remains-legacy-compatible (commands-suite)
-  "Legacy positional make-plot with NAME, DATA, and SPEC preserves the old separate slot shape and does not auto-register."
-  (clear-plot-if-present "TEST-FULL")
-  (let* ((data '(:values #((:a 1))))
-         (spec '(:mark :bar))
-         (p (make-plot "test-full" data spec)))
-    (unwind-protect
-         (progn
-           (assert-equal "test-full" (plot-name p))
-           (assert-equalp data (plot-data p))
-           (assert-equalp spec (plot-spec p))
-           (assert-false (find-plot "TEST-FULL")))
-      (clear-plot-if-present "TEST-FULL"))))
-
-(deftest make-plot-with-data-and-default-spec-remains-legacy-compatible (commands-suite)
-  "Legacy positional make-plot with NAME and DATA still preserves separate data/spec slots and does not auto-register."
-  (clear-plot-if-present "TEST-WITH-DATA")
-  (let* ((data '(:values #((:a 1))))
-         (p (make-plot "test-with-data" data)))
-    (unwind-protect
-         (progn
-           (assert-equal "test-with-data" (plot-name p))
-           (assert-equalp data (plot-data p))
-           (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
-                         (getf-string (plot-spec p) "$schema"))
-           (assert-false (find-plot "TEST-WITH-DATA")))
-      (clear-plot-if-present "TEST-WITH-DATA"))))
-
-(deftest make-plot-legacy-positional-forms-do-not-display-implicitly (commands-suite)
-  "Legacy positional make-plot compatibility forms remain construction-only and do not invoke PLOT:PLOT."
-  (let ((display-called nil)
-        (original-plot-function (symbol-function 'plot:plot)))
-    (unwind-protect
-         (progn
-           (setf (symbol-function 'plot:plot)
-                 (lambda (&rest args)
-                   (declare (ignore args))
-                   (setf display-called t)
-                   :display-called))
-           (make-plot "legacy-name-only")
-           (make-plot "legacy-with-data" '(:values #((:a 1))))
-           (make-plot "legacy-with-data-and-spec"
-                      '(:values #((:a 1)))
-                      '(:mark :bar))
-           (assert-false display-called))
-      (setf (symbol-function 'plot:plot) original-plot-function))))
-
-(deftest make-plot-legacy-positional-forms-signal-deprecation-warning (commands-suite)
-  "Legacy positional make-plot compatibility forms signal one deprecation warning directing callers to explicit MAKE-PLOT :BASE."
-  (let ((warning nil)
-        (warning-count 0))
-    (handler-bind ((vega::make-plot-legacy-positional-deprecated-warning
-                     (lambda (condition)
-                       (incf warning-count)
-                       (setf warning condition)
-                       (muffle-warning))))
-      (let ((vega::*make-plot-legacy-positional-deprecation-warning-issued-p* nil))
-        (make-plot "legacy-warning-name-only")
-        (make-plot "legacy-warning-with-data" '(:values #((:a 1))))
-        (make-plot "legacy-warning-with-data-and-spec"
-                   '(:values #((:a 1)))
-                   '(:mark :bar))))
-    (assert-eql 1 warning-count)
-    (assert-true warning)
-    (assert-true (search "MAKE-PLOT" (string-upcase (princ-to-string warning))))
-    (assert-true (search ":BASE" (string-upcase (princ-to-string warning))))))
+(deftest make-plot-legacy-positional-forms-are-removed (commands-suite)
+  "Legacy positional low-level make-plot forms now fail explicitly and point callers to MAKE-PLOT :BASE."
+  (dolist (thunk (list (lambda () (make-plot "legacy-name-only"))
+                       (lambda () (make-plot "legacy-with-data" '(:values #((:a 1)))))
+                       (lambda () (make-plot "legacy-with-data-and-spec"
+                                             '(:values #((:a 1)))
+                                             '(:mark :bar)))))
+    (let ((message nil))
+      (assert-true
+       (handler-case
+           (progn
+             (funcall thunk)
+             nil)
+         (error (condition)
+           (setf message (string-upcase (princ-to-string condition)))
+           t)))
+      (assert-true (search "MAKE-PLOT" message))
+      (assert-true (search ":BASE" message))
+      (assert-true (search "REMOVED" message)))))
 
 (deftest make-plot-base-contract-constructs-plot (commands-suite)
   "make-plot accepts an explicit :base contract for advanced lower-level construction."
