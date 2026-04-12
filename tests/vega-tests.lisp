@@ -404,6 +404,114 @@ When VERSION is supplied the gist includes a history entry."
     (assert-equalp data (plot-data p))
     (assert-equalp spec (plot-spec p))))
 
+(deftest make-plot-base-contract-constructs-plot (commands-suite)
+  "make-plot accepts an explicit :base contract for advanced lower-level construction."
+  (let* ((base '(:mark :bar
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (p (make-plot :base base)))
+    (assert-false (plot-name p))
+    (assert-equalp '(:values #((:a "A" :b 1))) (plot-data p))
+    (assert-equal :bar (getf (plot-spec p) :mark))))
+
+(deftest make-plot-base-contract-name-option-normalizes-name (commands-suite)
+  "make-plot accepts :name on the explicit :base path and still does not register the plot."
+  (clear-plot-if-present "BASE-CONTRACT-NAMED")
+  (let* ((base '(:mark :line
+                 :data (:values #((:x 1 :y 2) (:x 2 :y 3)))
+                 :encoding (:x (:field :x) :y (:field :y))))
+         (p (make-plot :base base :name "base-contract-named")))
+    (unwind-protect
+         (progn
+           (assert-equal "BASE-CONTRACT-NAMED" (plot-name p))
+           (assert-equalp '(:values #((:x 1 :y 2) (:x 2 :y 3))) (plot-data p))
+           (assert-equal :line (getf (plot-spec p) :mark))
+           (assert-false (find-plot "BASE-CONTRACT-NAMED")))
+      (clear-plot-if-present "BASE-CONTRACT-NAMED"))))
+
+(deftest make-plot-base-overlay-contract-merges-overlay-fragments (commands-suite)
+  "make-plot accepts explicit :overlay fragments only on top of :base and merges them into the resulting plot."
+  (let* ((base '(:title "Base Title"
+                 :mark :bar
+                 :data (:values #((:x 1 :y 2 :group "A")
+                                  (:x 2 :y 3 :group "B")))
+                 :encoding (:x (:field :x)
+                            :y (:field :y))))
+         (overlay '((:title "Overlay Title")
+                    (:mark :point)
+                    (:encoding (:color (:field :group)))))
+         (p (make-plot :base base :overlay overlay))
+         (encoding (getf (plot-spec p) :encoding)))
+    (assert-false (plot-name p))
+    (assert-equalp '(:values #((:x 1 :y 2 :group "A")
+                               (:x 2 :y 3 :group "B")))
+                   (plot-data p))
+    (assert-equal "Overlay Title" (getf (plot-spec p) :title))
+    (assert-eql :point (getf (plot-spec p) :mark))
+    (assert-true (getf encoding :x))
+    (assert-true (getf encoding :y))
+    (assert-true (getf encoding :color))))
+
+(deftest make-plot-base-name-overlay-contract-normalizes-name (commands-suite)
+  "make-plot accepts :name and :overlay together on the explicit :base path."
+  (clear-plot-if-present "BASE-OVERLAY-NAMED")
+  (let* ((base '(:title "Base"
+                 :mark :line
+                 :data (:values #((:x 1 :y 2) (:x 2 :y 4)))
+                 :encoding (:x (:field :x)
+                            :y (:field :y))))
+         (overlay '((:title "Named Overlay")
+                    (:encoding (:tooltip (:field :y)))))
+         (p (make-plot :base base :name "base-overlay-named" :overlay overlay))
+         (encoding (getf (plot-spec p) :encoding)))
+    (unwind-protect
+         (progn
+           (assert-equal "BASE-OVERLAY-NAMED" (plot-name p))
+           (assert-equal "Named Overlay" (getf (plot-spec p) :title))
+           (assert-true (getf encoding :tooltip))
+           (assert-false (find-plot "BASE-OVERLAY-NAMED")))
+      (clear-plot-if-present "BASE-OVERLAY-NAMED"))))
+
+(deftest make-plot-high-level-fragments-construct-plot (commands-suite)
+  "make-plot accepts data plus high-level fragments on the new recommended path."
+  (let* ((data #((:x 1 :y 2) (:x 2 :y 3)))
+         (p (make-plot data
+                       '(:title "High-Level Constructor")
+                       '(:mark :point)
+                       '(:encoding (:x (:field :x)
+                                    :y (:field :y))))))
+    (assert-false (plot-name p))
+    (assert-equalp `(:values ,data) (plot-data p))
+    (assert-equal "High-Level Constructor" (getf (plot-spec p) :title))
+    (assert-eql :point (getf (plot-spec p) :mark))
+    (assert-equalp `(:values ,data) (getf (plot-spec p) :data))))
+
+(deftest make-plot-high-level-name-option-normalizes-name (commands-suite)
+  "make-plot accepts :name on the high-level path and still does not register the plot."
+  (clear-plot-if-present "HIGH-LEVEL-NAMED")
+  (let* ((data #((:x 1 :y 2)))
+         (p (make-plot data
+                       :name "high-level-named"
+                       '(:title "Named High-Level Constructor")
+                       '(:mark :point)
+                       '(:encoding (:x (:field :x)
+                                    :y (:field :y))))))
+    (unwind-protect
+         (progn
+           (assert-equal "HIGH-LEVEL-NAMED" (plot-name p))
+           (assert-equalp `(:values ,data) (plot-data p))
+           (assert-false (find-plot "HIGH-LEVEL-NAMED")))
+      (clear-plot-if-present "HIGH-LEVEL-NAMED"))))
+
+(deftest make-plot-unsupported-keyword-contract-fails-explicitly (commands-suite)
+  "Unsupported top-level keyword contracts still fail explicitly."
+  (assert-true
+   (handler-case
+       (progn
+         (make-plot :overlay '((:title "Not Supported Here")))
+         nil)
+     (error () t))))
+
 (deftest make-plot-from-spec-unnamed-construction (commands-suite)
   "make-plot-from-spec builds an unnamed plot and separates top-level data."
   (let* ((spec '(:mark :bar
@@ -433,6 +541,20 @@ When VERSION is supplied the gist includes a history entry."
          (p (make-plot-from-spec spec)))
     (assert-equal schema
                   (getf-string (plot-spec p) "$schema"))))
+
+(deftest make-plot-from-spec-named-construction-remains-unregistered (commands-suite)
+  "make-plot-from-spec remains a public compatibility constructor and does not auto-register named plots."
+  (clear-plot-if-present "SPEC-COMPAT")
+  (let* ((spec '(:mark :point
+                 :data (:values #((:x 1 :y 2)))
+                 :encoding (:x (:field :x) :y (:field :y))))
+         (p (make-plot-from-spec spec :name "spec-compat")))
+    (unwind-protect
+         (progn
+           (assert-equal "SPEC-COMPAT" (plot-name p))
+           (assert-equalp '(:values #((:x 1 :y 2))) (plot-data p))
+           (assert-false (find-plot "SPEC-COMPAT")))
+      (clear-plot-if-present "SPEC-COMPAT"))))
 
 (deftest register-plot-adds-normalized-name (registry-suite)
   "register-plot stores a plot by normalized name and updates plot-name."

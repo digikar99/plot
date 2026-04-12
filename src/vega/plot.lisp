@@ -42,6 +42,121 @@ already used by existing Vega specs here."
         when (and (stringp k) (string= k key))
           return v))
 
+(defun %legacy-plot-name-designator-p (object)
+  "Return true when OBJECT is accepted by the legacy positional low-level MAKE-PLOT compatibility path."
+  (or (stringp object)
+      (and (symbolp object)
+           (not (keywordp object)))))
+
+(defun %make-plot-instance (name data spec)
+  "Construct a VEGA-PLOT instance from already separated pieces."
+  (make-instance 'vega-plot :name name
+                            :data data
+                            :spec spec))
+
+(defun %parse-high-level-make-plot-arguments (arguments)
+  "Parse high-level MAKE-PLOT ARGUMENTS into optional NAME and FRAGMENTS.
+
+Supported shapes for the new high-level path are:
+  (make-plot data fragment &rest fragments)
+  (make-plot data :name name fragment &rest fragments)"
+  (let ((name nil)
+        (fragments arguments))
+    (when (and fragments (keywordp (first fragments)))
+      (assert (eq (first fragments) :name) ()
+              "Unsupported high-level MAKE-PLOT option ~S; only :NAME is accepted in this step."
+              (first fragments))
+      (assert (rest fragments) () "High-level MAKE-PLOT :NAME option requires a value.")
+      (setf name (second fragments)
+            fragments (cddr fragments)))
+    (assert fragments () "High-level MAKE-PLOT requires at least one fragment.")
+    (values name fragments)))
+
+(defun %parse-base-make-plot-arguments (arguments)
+  "Parse explicit :BASE MAKE-PLOT ARGUMENTS into BASE, optional NAME, and optional OVERLAY fragments.
+
+Supported shapes for this step are:
+  (make-plot :base base)
+  (make-plot :base base :name name)
+  (make-plot :base base :overlay overlay-fragments)
+  (make-plot :base base :name name :overlay overlay-fragments)"
+  (assert arguments () "MAKE-PLOT :BASE requires a base specification.")
+  (let ((base (first arguments))
+        (rest (rest arguments))
+        (name nil)
+        (overlay nil))
+    (when rest
+      (case (first rest)
+        (:name
+         (assert (rest rest) () "MAKE-PLOT :BASE :NAME option requires a value.")
+         (setf name (second rest)
+               rest (cddr rest)))
+        (:overlay)
+        (otherwise
+         (error "Unsupported MAKE-PLOT :BASE option ~S; expected :NAME or :OVERLAY in this step."
+                (first rest)))))
+    (when rest
+      (assert (eq (first rest) :overlay) ()
+              "Unsupported MAKE-PLOT :BASE option ~S; only :OVERLAY may follow :NAME in this step."
+              (first rest))
+      (assert (rest rest) () "MAKE-PLOT :BASE :OVERLAY option requires a value.")
+      (setf overlay (second rest)
+            rest (cddr rest))
+      (assert (listp overlay) ()
+              "MAKE-PLOT :BASE :OVERLAY requires an explicit list of overlay fragments, not ~S."
+              overlay)
+      (assert (every #'listp overlay) ()
+              "MAKE-PLOT :BASE :OVERLAY requires a list of fragment forms, not ~S."
+              overlay))
+    (assert (null rest) ()
+            "MAKE-PLOT :BASE accepts only BASE with optional :NAME and :OVERLAY in this step.")
+    (values base name overlay)))
+
+(defun %make-plot-from-authored-base (name base &optional (schema "https://vega.github.io/schema/vega-lite/v6.json"))
+  "Construct a VEGA-PLOT from authored lower-level BASE input.
+
+This owns the normalization/data-separation/final-construction path used by
+the public compatibility seam and by MAKE-PLOT's internal lower-level routes."
+  (let ((data (getf base :data))
+        (given-schema (%string-key-value base "$schema")))
+
+    (assert (%vega-spec-p base) () "Error spec is not a PLIST")
+    (assert (or (null data)
+                (plistp data)
+                (typep data 'quri.uri:uri)
+                (typep data 'df:data-frame))
+            () "Error data must be a PLIST, URI or DATA-FRAME, not a ~A" (type-of data))
+
+    ;; If DATA is a DATA-FRAME, and it has a name, use it as the title if one wasn't provided
+    #+nil
+    (if (and (typep data 'df:data-frame) ;we may not want a title
+             (slot-boundp data 'name)
+             (not (getf base :title)))
+        (setf (getf base :title) (name data)))
+
+    (unless given-schema
+      (setf (getf base "$schema") schema))
+    (%make-plot-instance (%normalize-plot-name name) data base)))
+
+(defun %make-plot-from-fragments (data arguments)
+  "Construct a VEGA-PLOT from DATA plus high-level fragment ARGUMENTS."
+  (multiple-value-bind (name fragments)
+      (%parse-high-level-make-plot-arguments arguments)
+    (%make-plot-from-authored-base
+     name
+     (apply #'merge-plists
+            `(:data (:values ,data))
+            fragments))))
+
+(defun %make-plot-from-base (arguments)
+  "Construct a VEGA-PLOT from an explicit lower-level :BASE contract."
+  (multiple-value-bind (base name overlay)
+      (%parse-base-make-plot-arguments arguments)
+    (%make-plot-from-authored-base name
+                                   (if overlay
+                                       (apply #'merge-plists base overlay)
+                                       base))))
+
 (defun show-plots ()
   "Show all plots in the current environment"
   (loop for i = 0 then (1+ i)
@@ -53,18 +168,42 @@ already used by existing Vega specs here."
 (defgeneric write-html (plot &optional html-loc spec-loc))
 (defgeneric write-spec (plot &key spec-loc data-url data-loc))
 
-(defun make-plot (name &optional
-			 data
-			 (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
-  "Plot constructor"
-  (make-instance 'vega-plot :name name
-			    :data data
-			    :spec spec))
+(defun make-plot (first &rest rest)
+  "Construct a VEGA-PLOT through the recommended high-level path, the explicit advanced :BASE path, or the legacy positional compatibility path.
+
+Recommended high-level path:
+  (make-plot data fragment &rest fragments)
+  (make-plot data :name name fragment &rest fragments)
+
+Explicit advanced lower-level path for this step:
+  (make-plot :base base)
+  (make-plot :base base :name name)
+  (make-plot :base base :overlay overlay-fragments)
+  (make-plot :base base :name name :overlay overlay-fragments)
+
+Legacy positional low-level compatibility path:
+  (make-plot name)
+  (make-plot name data)
+  (make-plot name data spec)"
+  (cond
+    ((keywordp first)
+     (case first
+       (:base (%make-plot-from-base rest))
+       (otherwise
+        (error "Unsupported MAKE-PLOT keyword contract ~S in this step." first))))
+    ((%legacy-plot-name-designator-p first)
+     (destructuring-bind (&optional
+                          data
+                          (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
+         rest
+       (%make-plot-instance first data spec)))
+    (t
+     (%make-plot-from-fragments first rest))))
 
 (defun make-plot-from-spec (spec &key name
                                  (schema "https://vega.github.io/schema/vega-lite/v6.json"))
-  "Construct a VEGA-PLOT from raw SPEC input without registering it."
-  (%defplot name spec schema))
+  "Compatibility constructor over the internal authored-base plot-construction helper."
+  (%make-plot-from-authored-base name spec schema))
 
 (defun register-plot (plot &key name)
   "Register PLOT in the global plot registry and return it."
@@ -140,28 +279,8 @@ This packages existing representations and does not introduce a second serialize
 ;;;
 
 (defun %defplot (name spec &optional (schema "https://vega.github.io/schema/vega-lite/v6.json"))
-  "A PLOT constructor that moves :data from the spec to the PLOT object.
-By putting :data onto the plot object we can write it to various locations and add the neccessary transformations to the spec."
-  (let ((data (getf spec :data))
-	(given-schema (%string-key-value spec "$schema")))
-
-    (assert (%vega-spec-p spec) () "Error spec is not a PLIST")
-    (assert (or (null data)
-                (plistp data)
-		(typep data 'quri.uri:uri)
-		(typep data 'df:data-frame))
-	    () "Error data must be a PLIST, URI or DATA-FRAME, not a ~A" (type-of data))
-
-    ;; If DATA is a DATA-FRAME, and it has a name, use it as the title if one wasn't provided
-    #+nil
-    (if (and (typep data 'df:data-frame) ;we may not want a title
-	     (slot-boundp data 'name)
-	     (not (getf spec :title)))
-	(setf (getf spec :title) (name data)))
-
-    (unless given-schema
-      (setf (getf spec "$schema") schema))
-    (make-plot (%normalize-plot-name name) data spec))) ;TODO update plot:plot class and remove DATA slot
+  "Internal compatibility wrapper over the canonical authored-base constructor helper."
+  (%make-plot-from-authored-base name spec schema))
 
 (defmacro defplot (name &body spec)
   "Define a plot NAME. Returns an object of PLOT class bound to a symbol NAME.  Adds symbol to *all-plots*."
