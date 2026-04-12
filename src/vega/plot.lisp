@@ -157,15 +157,31 @@ the public compatibility seam and by MAKE-PLOT's internal lower-level routes."
                                        (apply #'merge-plists base overlay)
                                        base))))
 
+(define-condition make-plot-legacy-positional-deprecated-warning (simple-warning)
+  ()
+  (:documentation "Warning signaled when a deprecated legacy positional MAKE-PLOT compatibility form is used.")
+  (:report (lambda (condition stream)
+             (declare (ignore condition))
+             (format stream
+                     "Legacy positional MAKE-PLOT forms are deprecated; prefer MAKE-PLOT with explicit :BASE for new lower-level code."))))
+
+(defvar *make-plot-legacy-positional-deprecation-warning-issued-p* nil
+  "Tracks whether the legacy positional MAKE-PLOT deprecation warning has already been signaled.")
+
 (defun %make-plot-from-legacy-positional (name &optional
                                                data
                                                (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
-  "Construct a VEGA-PLOT through the compatibility-only positional low-level path over explicit MAKE-PLOT :BASE construction.
+  "Construct a VEGA-PLOT through the deprecated compatibility-only positional low-level path over explicit MAKE-PLOT :BASE construction.
 
 Prefer explicit MAKE-PLOT :BASE construction for new lower-level code.
 This helper preserves the old external slot shape where DATA and SPEC remain
 separate, even though construction now routes through the explicit
 advanced contract."
+  ;; Continue the explicit deprecation arc for compatibility-only positional
+  ;; entry points while preserving their constructor behavior.
+  (unless *make-plot-legacy-positional-deprecation-warning-issued-p*
+    (setf *make-plot-legacy-positional-deprecation-warning-issued-p* t)
+    (warn 'make-plot-legacy-positional-deprecated-warning))
   (let* ((base (if data
                    (merge-plists spec `(:data ,data))
                    spec))
@@ -206,7 +222,8 @@ Legacy positional low-level compatibility path:
   (make-plot name data)
   (make-plot name data spec)
 
-The positional low-level forms are preserved for compatibility only.
+The positional low-level forms are preserved for compatibility only and are
+deprecated in favor of explicit MAKE-PLOT :BASE construction.
 Prefer explicit MAKE-PLOT :BASE construction for new lower-level code."
   (cond
     ((keywordp first)
