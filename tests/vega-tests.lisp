@@ -818,6 +818,123 @@ When VERSION is supplied the gist includes a history entry."
            (assert-false display-called))
       (setf (symbol-function 'plot:plot) original-plot-function))))
 
+(deftest geom-func-generates-inline-data-and-composes-with-gg (authoring-suite)
+  "GEOM:FUNC remains a fragment helper that generates inline data and composes with plot-owned GG helpers."
+  (let* ((plot (make-plot :base
+                          (vega::merge-plists
+                           '(:title "Geom Func")
+                           (geom:func #'sin
+                                      :xlim #(-1d0 1d0)
+                                      :n 5
+                                      :color "steelblue"
+                                      :stroke-width 2
+                                      :opacity 0.5)
+                           (gg:label :x "x" :y "sin(x)")
+                           (gg:theme :width 300 :height 180))))
+         (spec (plot-spec plot))
+         (mark (getf spec :mark))
+         (encoding (getf spec :encoding))
+         (data (getf (plot-data plot) :values)))
+    (assert-equal "Geom Func" (getf spec :title))
+    (assert-true (vectorp data))
+    (assert-eql 5 (length data))
+    (assert-eql :line (getf mark :type))
+    (assert-eql :monotone (getf mark :interpolate))
+    (assert-equal "steelblue" (getf mark :color))
+    (assert-eql 2 (getf mark :stroke-width))
+    (assert-equal 0.5 (getf mark :opacity))
+    (assert-eql :x (getf (getf encoding :x) :field))
+    (assert-eql :y (getf (getf encoding :y) :field))
+    (assert-equal "x" (getf (getf encoding :x) :title))
+    (assert-equal "sin(x)" (getf (getf encoding :y) :title))
+    (assert-eql -1.0d0 (getf (aref data 0) :x))
+    (assert-eql 1.0d0 (getf (aref data 4) :x))
+    (assert-equal 300 (getf spec :width))
+    (assert-equal 180 (getf spec :height))))
+
+(deftest geom-func-drops-invalid-evaluation-points (authoring-suite)
+  "GEOM:FUNC drops points whose evaluation signals an error."
+  (let* ((plot (make-plot :base
+                          (vega::merge-plists
+                           '(:title "Geom Func Filtering")
+                           (geom:func (lambda (x)
+                                        (if (zerop x)
+                                            (error "boom")
+                                            x))
+                                      :xlim #(-1d0 1d0)
+                                      :n 5))))
+         (data (getf (plot-data plot) :values)))
+    (assert-true (vectorp data))
+    (assert-eql 4 (length data))
+    (assert-false (find 0.0d0 data :key (lambda (row) (getf row :x)) :test #'=))))
+
+(deftest geom-finite-real-helper-rejects-infinity (authoring-suite)
+  "The internal finite-real helper accepts ordinary finite numbers and rejects infinity."
+  (assert-true (geom::%finite-real-p 1d0))
+  #+sbcl
+  (progn
+    (assert-false (geom::%finite-real-p sb-ext:double-float-positive-infinity))
+    (assert-false (geom::%finite-real-p sb-ext:double-float-negative-infinity))))
+
+(deftest geom-loess-fragment-composes-through-make-plot (authoring-suite)
+  "GEOM:LOESS remains a transform-oriented fragment helper that composes with plot-owned GG helpers."
+  (let* ((data #((:x 1 :y 2 :group "A")
+                 (:x 2 :y 4 :group "A")
+                 (:x 3 :y 3 :group "B")))
+         (plot (make-plot data
+                          '(:title "Geom Loess")
+                          (geom:loess :x :y
+                                      :group :group
+                                      :opacity 0.4
+                                      :stroke-width 2
+                                      :stroke-dash #(4 2))
+                          (gg:label :x "X" :y "Y")
+                          (gg:theme :width 420 :height 240)))
+         (spec (plot-spec plot))
+         (transform (getf spec :transform))
+         (transform-entry (aref transform 0))
+         (mark (getf spec :mark))
+         (encoding (getf spec :encoding)))
+    (assert-equalp `(:values ,data) (plot-data plot))
+    (assert-true (vectorp transform))
+    (assert-eql 1 (length transform))
+    (assert-eql :y (getf transform-entry :loess))
+    (assert-eql :x (getf transform-entry :on))
+    (assert-equal 0.3 (getf transform-entry :bandwidth))
+    (assert-equalp #(:group) (getf transform-entry :groupby))
+    (assert-eql :line (getf mark :type))
+    (assert-eql 2 (getf mark :stroke-width))
+    (assert-equalp #(4 2) (getf mark :stroke-dash))
+    (assert-equal 0.4 (getf mark :opacity))
+    (assert-eql :quantitative (getf (getf encoding :x) :type))
+    (assert-eql :quantitative (getf (getf encoding :y) :type))
+    (assert-eql :group (getf (getf encoding :color) :field))
+    (assert-equal "X" (getf (getf encoding :x) :title))
+    (assert-equal "Y" (getf (getf encoding :y) :title))
+    (assert-equal 420 (getf spec :width))
+    (assert-equal 240 (getf spec :height))))
+
+(deftest geom-advanced-helpers-do-not-display-implicitly (authoring-suite)
+  "GEOM:FUNC and GEOM:LOESS remain construction-only helpers and do not invoke PLOT:PLOT."
+  (let ((display-called nil)
+        (original-plot-function (symbol-function 'plot:plot)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'plot:plot)
+                 (lambda (&rest args)
+                   (declare (ignore args))
+                   (setf display-called t)
+                   :display-called))
+           (make-plot :base
+                      (vega::merge-plists
+                       '(:title "No Display Func")
+                       (geom:func #'sin :xlim #(-1d0 1d0) :n 5)))
+           (make-plot #((:x 1 :y 2) (:x 2 :y 3))
+                      '(:title "No Display Loess")
+                      (geom:loess :x :y))
+           (assert-false display-called))
+      (setf (symbol-function 'plot:plot) original-plot-function))))
+
 (deftest make-plot-unsupported-keyword-contract-fails-explicitly (commands-suite)
   "Unsupported top-level keyword contracts still fail explicitly."
   (assert-true

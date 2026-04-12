@@ -129,5 +129,7 @@
            #:point
            #:line
            #:box-plot
-           #:error-bar)
+           #:error-bar
+           #:func
+           #:loess)
   (:documentation "GEOM provides the plot-owned grammar-of-graphics fragment layer for the core mark-oriented statistical plotting helpers."))

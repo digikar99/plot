@@ -284,3 +284,104 @@ TICKS: if non-NIL, show tick marks at whisker ends."
                                ,@(unless legend '(:legend :null)))))
                  ,@(when opacity
                      `(:opacity (:value ,opacity)))))))
+
+;; This could use finite-real-p from num-utils, but that would
+;; introduce a dependency, and it's a simple function.
+(defun %finite-real-p (x)
+  "Return T iff X is a finite real number - neither infinity nor NaN.
+Works portably by exploiting the fact that IEEE 754 comparisons with
+an infinite or NaN operand always return NIL."
+  (and (realp x)
+       (< (- most-positive-double-float) x most-positive-double-float)))
+
+;;; Unlike the data-driven geom helpers (point, bar, histogram, etc.),
+;;; FUNC is self-contained: it samples FN at N evenly-spaced x values
+;;; over XLIM using AOPS:LINSPACE, pairs each x with its computed y,
+;;; and embeds the resulting vector of plists as an inline :data block.
+;;; This means FUNC can be used without any external data frame.
+
+(defun func (fn &key
+                  (xlim #(0d0 1d0))
+                  (n 100)
+                  (color nil)
+                  (stroke-width nil)
+                  (stroke-dash nil)
+                  (opacity nil)
+                  (interpolate :monotone))
+  "Return a self-contained Vega-Lite plist that plots FN as a line.
+
+FN is called with a single DOUBLE-FLOAT argument x and must return a
+real number. N evenly-spaced x values are drawn from the closed
+interval [xmin, xmax] defined by XLIM using AOPS:LINSPACE. The
+resulting (x, y) pairs are embedded as an inline :data block, so no
+external data frame is required.
+
+Points where FN signals a condition or returns a non-finite value are
+silently dropped."
+  (check-type fn function)
+  (check-type xlim vector)
+  (check-type n (integer 2))
+  (let* ((xmin (coerce (aref xlim 0) 'double-float))
+         (xmax (coerce (aref xlim 1) 'double-float))
+         (xs (aops:linspace xmin xmax n))
+         (values (let ((acc '()))
+                   (map nil
+                        (lambda (x)
+                          (let ((xf (coerce x 'double-float)))
+                            (handler-case
+                                (let ((y (funcall fn xf)))
+                                  (when (%finite-real-p y)
+                                    (push (list :x xf
+                                                :y (coerce y 'double-float))
+                                          acc)))
+                              (error () nil))))
+                        xs)
+                   (coerce (nreverse acc) 'vector)))
+         (mark-props `(,@(when interpolate `(:interpolate ,interpolate))
+                       ,@(when stroke-width `(:stroke-width ,stroke-width))
+                       ,@(when stroke-dash `(:stroke-dash ,stroke-dash))
+                       ,@(when (stringp color) `(:color ,color))
+                       ,@(when opacity `(:opacity ,opacity)))))
+    `(:data (:values ,values)
+      :mark (:type :line ,@mark-props)
+      :encoding (:x (:field :x :type :quantitative)
+                 :y (:field :y :type :quantitative)))))
+
+(defun loess (x y &key
+              (x-type :quantitative)
+              (y-type :quantitative)
+              (bandwidth 0.3)
+              (color nil)
+              (group nil)
+              (stroke-width nil)
+              (stroke-dash nil)
+              (opacity nil))
+  "Return plist specifying a LOESS smoothing layer.
+
+X: the predictor field (the 'on' field in the Vega-Lite transform)
+Y: the response field (the 'loess' field in the Vega-Lite transform)
+X-TYPE: Vega-Lite type for the x channel (default :quantitative)
+Y-TYPE: Vega-Lite type for the y channel (default :quantitative)
+BANDWIDTH: smoothing bandwidth in (0, 1] (default 0.3)
+COLOR: a CSS color string for a fixed line color, or a keyword field
+       name for nominal color encoding.
+GROUP: optional nominal field; a separate LOESS curve is fitted per group
+STROKE-WIDTH: number for fixed line stroke width
+STROKE-DASH: vector for a dash pattern, e.g. #(4 2)
+OPACITY: opacity value between 0 and 1"
+  (let ((mark-props `(,@(when stroke-width `(:stroke-width ,stroke-width))
+                      ,@(when stroke-dash `(:stroke-dash ,stroke-dash))
+                      ,@(when (stringp color) `(:color ,color))
+                      ,@(when opacity `(:opacity ,opacity)))))
+    `(:transform #((:loess ,y :on ,x
+                    :bandwidth ,bandwidth
+                    ,@(when group `(:groupby #(,group)))))
+      :mark ,(if mark-props
+                 `(:type :line ,@mark-props)
+                 :line)
+      :encoding (:x (:field ,x :type ,x-type)
+                 :y (:field ,y :type ,y-type)
+                 ,@(cond ((keywordp color)
+                          `(:color (:field ,color :type :nominal)))
+                         ((and group (not color))
+                          `(:color (:field ,group :type :nominal))))))))
