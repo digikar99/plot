@@ -3,8 +3,10 @@
 .#*
 \#*\#
 
-# Copilot agent/skill/prompt files
+# LLM agent/skill/prompt files
 .github/
+.agents/
+AGENTS.md
 
 /TAGS
 /WIP
@@ -19,3 +21,5 @@ NOTES.org
 *.text
 
 public
+
+

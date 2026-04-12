@@ -556,6 +556,21 @@ When VERSION is supplied the gist includes a history entry."
            (assert-false (find-plot "SPEC-COMPAT")))
       (clear-plot-if-present "SPEC-COMPAT"))))
 
+(deftest make-plot-from-spec-schema-argument-remains-compatible (commands-suite)
+  "make-plot-from-spec still honors its explicit schema argument while remaining an unregistered compatibility wrapper."
+  (clear-plot-if-present "SPEC-COMPAT-SCHEMA")
+  (let* ((schema "https://example.com/wrapper-schema.json")
+         (spec '(:mark :point
+                 :data (:values #((:x 1 :y 2)))
+                 :encoding (:x (:field :x) :y (:field :y))))
+         (p (make-plot-from-spec spec :name "spec-compat-schema" :schema schema)))
+    (unwind-protect
+         (progn
+           (assert-equal "SPEC-COMPAT-SCHEMA" (plot-name p))
+           (assert-equal schema (getf-string (plot-spec p) "$schema"))
+           (assert-false (find-plot "SPEC-COMPAT-SCHEMA")))
+      (clear-plot-if-present "SPEC-COMPAT-SCHEMA"))))
+
 (deftest register-plot-adds-normalized-name (registry-suite)
   "register-plot stores a plot by normalized name and updates plot-name."
   (clear-plot-if-present "REGISTRY-TEST")

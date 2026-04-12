@@ -202,8 +202,12 @@ Legacy positional low-level compatibility path:
 
 (defun make-plot-from-spec (spec &key name
                                  (schema "https://vega.github.io/schema/vega-lite/v6.json"))
-  "Compatibility constructor over the internal authored-base plot-construction helper."
-  (%make-plot-from-authored-base name spec schema))
+  "Compatibility constructor over explicit MAKE-PLOT :BASE construction."
+  ;; Preserve the existing SCHEMA compatibility seam while centering public
+  ;; construction on MAKE-PLOT.
+  (unless (%string-key-value spec "$schema")
+    (setf (getf spec "$schema") schema))
+  (make-plot :base spec :name name))
 
 (defun register-plot (plot &key name)
   "Register PLOT in the global plot registry and return it."
@@ -294,7 +298,7 @@ This packages existing representations and does not introduce a second serialize
                              form))
                        `(list ,@spec))))
     `(progn
-     (defparameter ,name (make-plot-from-spec ,spec-form :name ',name))
+     (defparameter ,name (make-plot :base ,spec-form :name ',name))
      (register-plot ,name)
      ,name)))				;Return the plot instead of the list
 
