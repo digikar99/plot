@@ -80,17 +80,7 @@ WIDTH, HEIGHT: pixel dimensions
 FONT: base font family string -- applied to the entire chart via config.font
 BACKGROUND: CSS color string for the chart background
 VIEW-STROKE: stroke around the view rectangle; :null (default) removes it, a string sets a CSS color, NIL omits the property entirely
-PADDING: padding in pixels (number) or plist (:left :right :top :bottom)
-
-Like ggplot2's coord_cartesian: restricts the visible area without
-dropping data.
-
-X-DOMAIN / Y-DOMAIN:
-  - For quantitative axes: a vector #(min max)
-  - For categorical axes: a vector of category names #(\"A\" \"B\" \"C\")
-
-CLIP: if T (default), marks outside the domain are hidden.
-      Set to NIL for bar/boxplot where clipping cuts marks."
+PADDING: padding in pixels (number) or plist (:left :right :top :bottom)"
   (let ((config-props `(,@(when font `(:font ,font))
                         ,@(unless (null view-stroke)
                             `(:view (:stroke ,view-stroke))))))
@@ -103,4 +93,3 @@ CLIP: if T (default), marks outside the domain are hidden.
 (defun layer (&rest geom-plists)
   "Wrap two or more plot fragment plists into a Vega-Lite layer spec."
   `(:layer ,(apply #'vector geom-plists)))
-

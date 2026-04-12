@@ -49,6 +49,12 @@ report formats with line-breaks instead of printing on a single line."
         when (and (stringp k) (string= k key))
           return v))
 
+(defun package-external-symbol-names (package)
+  "Return the sorted list of external symbol names exported by PACKAGE."
+  (sort (loop for symbol being the external-symbols of package
+              collect (symbol-name symbol))
+        #'string<))
+
 (defun clear-plot-if-present (name)
   "Remove NAME from the registry if present."
   (unregister-plot name)
@@ -566,6 +572,25 @@ When VERSION is supplied the gist includes a history entry."
            (assert-equalp `(:values ,data) (plot-data p))
            (assert-false (find-plot "HIGH-LEVEL-NAMED")))
       (clear-plot-if-present "HIGH-LEVEL-NAMED"))))
+
+(deftest authoring-package-surfaces-match-plot-owned-entry-points (authoring-suite)
+  "plot/vega loads GG and GEOM with the exact intended public authoring surfaces."
+  (flet ((assert-package-surface (package-name expected-symbol-names)
+           (let ((package (find-package package-name)))
+             (assert-true package)
+             (assert-equalp (sort (copy-list expected-symbol-names) #'string<)
+                            (package-external-symbol-names package))
+             (dolist (name expected-symbol-names)
+               (multiple-value-bind (symbol status)
+                   (find-symbol name package)
+                 (assert-true symbol)
+                 (assert-eql :external status)
+                 (assert-true (fboundp symbol)))))))
+    (assert-package-surface :gg
+                            '("LABEL" "AXES" "COORD" "THEME" "TOOLTIP" "LAYER"))
+    (assert-package-surface :geom
+                            '("HISTOGRAM" "BAR" "POINT" "LINE" "BOX-PLOT"
+                              "ERROR-BAR" "FUNC" "LOESS"))))
 
 (deftest gg-fragments-compose-through-make-plot (authoring-suite)
   "The migrated GG fragment layer composes through plot-owned MAKE-PLOT on the high-level path."

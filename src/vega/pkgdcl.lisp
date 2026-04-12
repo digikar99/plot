@@ -29,7 +29,6 @@
    #:write-html
    #:write-spec
    #:write-vega-data			;write data to a file
-   #:show-plots				;move to PLOT?
    #:*all-plots*			;global list of plots
    #:plot-to-device
    #:merge-plists			;utility
@@ -87,7 +86,6 @@
    #:us-10m
    #:us-state-capitals
    #:volcano
-   #:weather
    #:wheat
    #:world-110m
    #:airports
@@ -112,8 +110,7 @@
    #:weather
    #:windvectors
    #:zipcodes
-   #:unemployment
-   #:flights-200k))
+   #:unemployment))
 
 
 
