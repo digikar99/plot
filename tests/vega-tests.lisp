@@ -386,23 +386,33 @@ When VERSION is supplied the gist includes a history entry."
 ;;; commands-suite — make-plot constructor
 ;;;
 
-(deftest make-plot-defaults (commands-suite)
-  "make-plot with only a name has nil data and v6 schema in spec."
+(deftest make-plot-name-only-remains-legacy-compatible (commands-suite)
+  "Legacy positional make-plot with NAME only remains a compatibility path and does not auto-register."
+  (clear-plot-if-present "TEST-DEFAULT")
   (let ((p (make-plot "test-default")))
-    (assert-equal "test-default" (plot-name p))
-    (assert-false (plot-data p))
-    ;; Default spec has string key "$schema"; use getf-string
-    (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
-                         (getf-string (plot-spec p) "$schema"))))
+    (unwind-protect
+         (progn
+           (assert-equal "test-default" (plot-name p))
+           (assert-false (plot-data p))
+           ;; Default spec has string key "$schema"; use getf-string
+           (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
+                         (getf-string (plot-spec p) "$schema"))
+           (assert-false (find-plot "TEST-DEFAULT")))
+      (clear-plot-if-present "TEST-DEFAULT"))))
 
-(deftest make-plot-with-data-and-spec (commands-suite)
-  "make-plot with data and spec stores both correctly."
+(deftest make-plot-with-data-and-spec-remains-legacy-compatible (commands-suite)
+  "Legacy positional make-plot with NAME, DATA, and SPEC preserves the old separate slot shape and does not auto-register."
+  (clear-plot-if-present "TEST-FULL")
   (let* ((data '(:values #((:a 1))))
          (spec '(:mark :bar))
          (p (make-plot "test-full" data spec)))
-    (assert-equal "test-full" (plot-name p))
-    (assert-equalp data (plot-data p))
-    (assert-equalp spec (plot-spec p))))
+    (unwind-protect
+         (progn
+           (assert-equal "test-full" (plot-name p))
+           (assert-equalp data (plot-data p))
+           (assert-equalp spec (plot-spec p))
+           (assert-false (find-plot "TEST-FULL")))
+      (clear-plot-if-present "TEST-FULL"))))
 
 (deftest make-plot-with-data-and-default-spec-remains-legacy-compatible (commands-suite)
   "Legacy positional make-plot with NAME and DATA still preserves separate data/spec slots and does not auto-register."
@@ -417,6 +427,25 @@ When VERSION is supplied the gist includes a history entry."
                          (getf-string (plot-spec p) "$schema"))
            (assert-false (find-plot "TEST-WITH-DATA")))
       (clear-plot-if-present "TEST-WITH-DATA"))))
+
+(deftest make-plot-legacy-positional-forms-do-not-display-implicitly (commands-suite)
+  "Legacy positional make-plot compatibility forms remain construction-only and do not invoke PLOT:PLOT."
+  (let ((display-called nil)
+        (original-plot-function (symbol-function 'plot:plot)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'plot:plot)
+                 (lambda (&rest args)
+                   (declare (ignore args))
+                   (setf display-called t)
+                   :display-called))
+           (make-plot "legacy-name-only")
+           (make-plot "legacy-with-data" '(:values #((:a 1))))
+           (make-plot "legacy-with-data-and-spec"
+                      '(:values #((:a 1)))
+                      '(:mark :bar))
+           (assert-false display-called))
+      (setf (symbol-function 'plot:plot) original-plot-function))))
 
 (deftest make-plot-base-contract-constructs-plot (commands-suite)
   "make-plot accepts an explicit :base contract for advanced lower-level construction."

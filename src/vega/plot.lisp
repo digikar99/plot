@@ -160,9 +160,10 @@ the public compatibility seam and by MAKE-PLOT's internal lower-level routes."
 (defun %make-plot-from-legacy-positional (name &optional
                                                data
                                                (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
-  "Construct a VEGA-PLOT through the legacy positional compatibility path over explicit MAKE-PLOT :BASE construction.
+  "Construct a VEGA-PLOT through the compatibility-only positional low-level path over explicit MAKE-PLOT :BASE construction.
 
-This preserves the old external slot shape where DATA and SPEC remain
+Prefer explicit MAKE-PLOT :BASE construction for new lower-level code.
+This helper preserves the old external slot shape where DATA and SPEC remain
 separate, even though construction now routes through the explicit
 advanced contract."
   (let* ((base (if data
@@ -203,7 +204,10 @@ Explicit advanced lower-level path for this step:
 Legacy positional low-level compatibility path:
   (make-plot name)
   (make-plot name data)
-  (make-plot name data spec)"
+  (make-plot name data spec)
+
+The positional low-level forms are preserved for compatibility only.
+Prefer explicit MAKE-PLOT :BASE construction for new lower-level code."
   (cond
     ((keywordp first)
      (case first
@@ -211,6 +215,8 @@ Legacy positional low-level compatibility path:
        (otherwise
         (error "Unsupported MAKE-PLOT keyword contract ~S in this step." first))))
     ((%legacy-plot-name-designator-p first)
+     ;; Preserve the old positional low-level entry points as a compatibility
+     ;; seam, but keep the explicit :BASE contract as the advanced constructor.
      (destructuring-bind (&optional
                           data
                           (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
