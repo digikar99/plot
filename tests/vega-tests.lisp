@@ -27,6 +27,7 @@ report formats with line-breaks instead of printing on a single line."
 (defsuite encoding-suite (vega))
 (defsuite commands-suite (vega))
 (defsuite representation-suite (vega))
+(defsuite authoring-suite (vega))
 (defsuite registry-suite (vega))
 
 ;;; Utility: parse JSON string to hash-table for order-independent comparison
@@ -565,6 +566,82 @@ When VERSION is supplied the gist includes a history entry."
            (assert-equalp `(:values ,data) (plot-data p))
            (assert-false (find-plot "HIGH-LEVEL-NAMED")))
       (clear-plot-if-present "HIGH-LEVEL-NAMED"))))
+
+(deftest gg-fragments-compose-through-make-plot (authoring-suite)
+  "The migrated GG fragment layer composes through plot-owned MAKE-PLOT on the high-level path."
+  (let* ((data #((:x 1 :y 2 :group "A")
+                 (:x 2 :y 3 :group "B")))
+         (plot (make-plot data
+                          '(:title "GG Composition")
+                          '(:mark (:type :point :filled t))
+                          '(:encoding (:x (:field :x :type :quantitative)
+                                       :y (:field :y :type :quantitative)))
+                          (gg:label :x "X Axis" :y "Y Axis")
+                          (gg:axes :x-domain #(0 10)
+                                   :y-domain #(0 10)
+                                   :color-scheme :viridis)
+                          (gg:tooltip :x '(:y :quantitative))
+                          (gg:coord :x-domain #(0 5))
+                          (gg:theme :width 420
+                                    :height 240
+                                    :font "IBM Plex Sans"
+                                    :background "#f8f4ec"))))
+    (let* ((spec (plot-spec plot))
+           (mark (getf spec :mark))
+           (encoding (getf spec :encoding))
+           (x-encoding (getf encoding :x))
+           (y-encoding (getf encoding :y))
+           (color-encoding (getf encoding :color))
+           (tooltip-encoding (getf encoding :tooltip))
+           (config (getf spec :config)))
+      (assert-equalp `(:values ,data) (plot-data plot))
+      (assert-equal "GG Composition" (getf spec :title))
+      (assert-eql :point (getf mark :type))
+      (assert-true (getf mark :filled))
+      (assert-true (getf mark :clip))
+      (assert-equal "X Axis" (getf x-encoding :title))
+      (assert-equal "Y Axis" (getf y-encoding :title))
+      (assert-equalp #(0 5) (getf (getf x-encoding :scale) :domain))
+      (assert-equalp #(0 10) (getf (getf y-encoding :scale) :domain))
+      (assert-equal :viridis (getf (getf color-encoding :scale) :scheme))
+      (assert-true (vectorp tooltip-encoding))
+      (assert-eql 2 (length tooltip-encoding))
+      (assert-equal 420 (getf spec :width))
+      (assert-equal 240 (getf spec :height))
+      (assert-equal "#f8f4ec" (getf spec :background))
+      (assert-equal "IBM Plex Sans" (getf config :font)))))
+
+(deftest gg-layer-composes-through-make-plot-without-display (authoring-suite)
+  "The migrated GG layer helper stays construction-only and does not invoke PLOT:PLOT."
+  (let ((display-called nil)
+        (original-plot-function (symbol-function 'plot:plot))
+        (data #((:x 1 :y 2) (:x 2 :y 4))))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'plot:plot)
+                 (lambda (&rest args)
+                   (declare (ignore args))
+                   (setf display-called t)
+                   :display-called))
+           (let* ((plot (make-plot data
+                                   '(:title "Layered GG")
+                                   (gg:layer
+                                    '(:mark (:type :point :filled t)
+                                      :encoding (:x (:field :x :type :quantitative)
+                                                 :y (:field :y :type :quantitative)))
+                                    '(:mark :line
+                                      :encoding (:x (:field :x :type :quantitative)
+                                                 :y (:field :y :type :quantitative))))))
+                  (spec (plot-spec plot))
+                  (layers (getf spec :layer)))
+             (assert-false display-called)
+             (assert-equalp `(:values ,data) (plot-data plot))
+             (assert-equalp `(:values ,data) (getf spec :data))
+             (assert-true (vectorp layers))
+             (assert-eql 2 (length layers))
+             (assert-eql :point (getf (getf (aref layers 0) :mark) :type))
+             (assert-eql :line (getf (aref layers 1) :mark))))
+      (setf (symbol-function 'plot:plot) original-plot-function))))
 
 (deftest make-plot-unsupported-keyword-contract-fails-explicitly (commands-suite)
   "Unsupported top-level keyword contracts still fail explicitly."

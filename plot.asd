@@ -62,6 +62,7 @@
   :serial t
   :pathname    "src/vega/"
   :components ((:file "pkgdcl")
+	       (:file "gg-pkgdcl")
 	       (:file "init")
 	       (:file "data")
 	       (:file "plot")
@@ -69,6 +70,7 @@
 	       (:file "encode")
 	       (:file "commands")
 	       (:file "utilities")
+	       (:file "gg")
 	       (:file "statistics")
 	       (:file "vega-datasets"))
   :in-order-to ((test-op (test-op "plot/vega/tests"))))
