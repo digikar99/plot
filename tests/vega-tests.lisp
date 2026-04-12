@@ -421,7 +421,20 @@ When VERSION is supplied the gist includes a history entry."
          (p (make-plot :base base)))
     (assert-false (plot-name p))
     (assert-equalp '(:values #((:a "A" :b 1))) (plot-data p))
-    (assert-equal :bar (getf (plot-spec p) :mark))))
+    (assert-equal :bar (getf (plot-spec p) :mark))
+    (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
+                  (getf-string (plot-spec p) "$schema"))))
+
+(deftest make-plot-base-contract-preserves-explicit-schema (commands-suite)
+  "make-plot :base preserves an explicit schema on the authored base."
+  (let* ((schema "https://example.com/custom-schema.json")
+         (base `("$schema" ,schema
+                 :mark :bar
+                 :data (:values #((:a "A" :b 1)))
+                 :encoding (:x (:field :a) :y (:field :b))))
+         (p (make-plot :base base)))
+    (assert-equal schema
+                  (getf-string (plot-spec p) "$schema"))))
 
 (deftest make-plot-base-contract-name-option-normalizes-name (commands-suite)
   "make-plot accepts :name on the explicit :base path and still does not register the plot."
@@ -908,100 +921,8 @@ When VERSION is supplied the gist includes a history entry."
          nil)
      (error () t))))
 
-(deftest make-plot-from-spec-signals-deprecation-warning (commands-suite)
-  "make-plot-from-spec signals a deprecation warning that directs callers to explicit MAKE-PLOT :BASE."
-  (let ((warning nil))
-    (handler-bind ((vega::make-plot-from-spec-deprecated-warning
-                     (lambda (condition)
-                       (setf warning condition)
-                       (muffle-warning))))
-      (let ((vega::*make-plot-from-spec-deprecation-warning-issued-p* nil))
-        (make-plot-from-spec '(:mark :bar
-                               :data (:values #((:a "A" :b 1)))
-                               :encoding (:x (:field :a) :y (:field :b))))))
-    (assert-true warning)
-    (assert-true (search "MAKE-PLOT" (string-upcase (princ-to-string warning))))
-    (assert-true (search ":BASE" (string-upcase (princ-to-string warning))))))
-
-(deftest make-plot-from-spec-unnamed-construction (commands-suite)
-  "make-plot-from-spec remains an unnamed compatibility wrapper over explicit :base construction."
-  (let* ((spec '(:mark :bar
-                 :data (:values #((:a "A" :b 1)))
-                 :encoding (:x (:field :a) :y (:field :b))))
-         (p (make-plot-from-spec spec)))
-    (assert-false (plot-name p))
-    (assert-equalp '(:values #((:a "A" :b 1))) (plot-data p))
-    (assert-equal :bar (getf (plot-spec p) :mark))))
-
-(deftest make-plot-from-spec-inserts-default-schema (commands-suite)
-  "make-plot-from-spec preserves its schema-oriented compatibility behavior when absent from the base spec."
-  (let* ((spec '(:mark :bar
-                 :data (:values #((:a "A" :b 1)))
-                 :encoding (:x (:field :a) :y (:field :b))))
-         (p (make-plot-from-spec spec)))
-    (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
-                  (getf-string (plot-spec p) "$schema"))))
-
-(deftest make-plot-from-spec-preserves-explicit-schema (commands-suite)
-  "make-plot-from-spec preserves an explicit schema while remaining subordinate to MAKE-PLOT."
-  (let* ((schema "https://example.com/custom-schema.json")
-         (spec `("$schema" ,schema
-                 :mark :bar
-                 :data (:values #((:a "A" :b 1)))
-                 :encoding (:x (:field :a) :y (:field :b))))
-         (p (make-plot-from-spec spec)))
-    (assert-equal schema
-                  (getf-string (plot-spec p) "$schema"))))
-
-(deftest make-plot-from-spec-named-construction-remains-unregistered (commands-suite)
-  "make-plot-from-spec remains a public compatibility constructor and does not auto-register named plots."
-  (clear-plot-if-present "SPEC-COMPAT")
-  (let* ((spec '(:mark :point
-                 :data (:values #((:x 1 :y 2)))
-                 :encoding (:x (:field :x) :y (:field :y))))
-         (p (make-plot-from-spec spec :name "spec-compat")))
-    (unwind-protect
-         (progn
-           (assert-equal "SPEC-COMPAT" (plot-name p))
-           (assert-equalp '(:values #((:x 1 :y 2))) (plot-data p))
-           (assert-false (find-plot "SPEC-COMPAT")))
-      (clear-plot-if-present "SPEC-COMPAT"))))
-
-(deftest make-plot-from-spec-matches-explicit-base-construction (commands-suite)
-  "make-plot-from-spec remains a compatibility wrapper over explicit MAKE-PLOT :BASE construction."
-  (clear-plot-if-present "SPEC-COMPAT-EQUIV")
-  (let* ((template '(:mark :line
-                     :data (:values #((:x 1 :y 2) (:x 2 :y 3)))
-                     :encoding (:x (:field :x) :y (:field :y))))
-         (compat-spec (copy-tree template))
-         (base-spec (copy-tree template))
-         (compat (make-plot-from-spec compat-spec :name "spec-compat-equiv"))
-         (explicit (make-plot :base base-spec :name "spec-compat-equiv")))
-    (unwind-protect
-         (progn
-           (assert-equal (plot-name explicit) (plot-name compat))
-           (assert-equalp (plot-data explicit) (plot-data compat))
-           (assert-equalp (plot-spec explicit) (plot-spec compat))
-           (assert-false (find-plot "SPEC-COMPAT-EQUIV")))
-      (clear-plot-if-present "SPEC-COMPAT-EQUIV"))))
-
-(deftest make-plot-from-spec-schema-argument-remains-compatible (commands-suite)
-  "make-plot-from-spec still honors its explicit schema argument while remaining an unregistered compatibility wrapper."
-  (clear-plot-if-present "SPEC-COMPAT-SCHEMA")
-  (let* ((schema "https://example.com/wrapper-schema.json")
-         (spec '(:mark :point
-                 :data (:values #((:x 1 :y 2)))
-                 :encoding (:x (:field :x) :y (:field :y))))
-         (p (make-plot-from-spec spec :name "spec-compat-schema" :schema schema)))
-    (unwind-protect
-         (progn
-           (assert-equal "SPEC-COMPAT-SCHEMA" (plot-name p))
-           (assert-equal schema (getf-string (plot-spec p) "$schema"))
-           (assert-false (find-plot "SPEC-COMPAT-SCHEMA")))
-      (clear-plot-if-present "SPEC-COMPAT-SCHEMA"))))
-
-(deftest make-plot-from-spec-does-not-display-implicitly (commands-suite)
-  "make-plot-from-spec remains construction-only and does not invoke PLOT:PLOT implicitly."
+(deftest make-plot-base-contract-does-not-display-implicitly (commands-suite)
+  "make-plot :base remains construction-only and does not invoke PLOT:PLOT implicitly."
   (let ((display-called nil)
         (original-plot-function (symbol-function 'plot:plot)))
     (unwind-protect
@@ -1011,16 +932,17 @@ When VERSION is supplied the gist includes a history entry."
                    (declare (ignore args))
                    (setf display-called t)
                    :display-called))
-           (make-plot-from-spec '(:mark :bar
-                                  :data (:values #((:a "A" :b 1)))
-                                  :encoding (:x (:field :a) :y (:field :b))))
+           (make-plot :base
+                      '(:mark :bar
+                        :data (:values #((:a "A" :b 1)))
+                        :encoding (:x (:field :a) :y (:field :b))))
            (assert-false display-called))
       (setf (symbol-function 'plot:plot) original-plot-function))))
 
 (deftest register-plot-adds-normalized-name (registry-suite)
   "register-plot stores a plot by normalized name and updates plot-name."
   (clear-plot-if-present "REGISTRY-TEST")
-  (let* ((plot (make-plot-from-spec '(:mark :bar) :name "registry-test")))
+  (let* ((plot (make-plot :base '(:mark :bar) :name "registry-test")))
     (unwind-protect
          (progn
            (assert-true (eq plot (register-plot plot)))
@@ -1033,8 +955,8 @@ When VERSION is supplied the gist includes a history entry."
   "list-plots returns sorted names from the registry."
   (clear-plot-if-present "ALPHA-PLOT")
   (clear-plot-if-present "BETA-PLOT")
-  (let ((alpha (make-plot-from-spec '(:mark :bar) :name "alpha-plot"))
-        (beta (make-plot-from-spec '(:mark :bar) :name "beta-plot")))
+  (let ((alpha (make-plot :base '(:mark :bar) :name "alpha-plot"))
+        (beta (make-plot :base '(:mark :bar) :name "beta-plot")))
     (unwind-protect
          (progn
            (register-plot beta)
@@ -1052,7 +974,7 @@ When VERSION is supplied the gist includes a history entry."
 (deftest unregister-plot-removes-and-returns-plot (registry-suite)
   "unregister-plot removes the plot and returns it."
   (clear-plot-if-present "DELETE-PLOT")
-  (let ((plot (register-plot (make-plot-from-spec '(:mark :bar) :name "delete-plot"))))
+  (let ((plot (register-plot (make-plot :base '(:mark :bar) :name "delete-plot"))))
     (assert-true (eq plot (unregister-plot "delete-plot")))
     (assert-false (find-plot "delete-plot"))))
 
