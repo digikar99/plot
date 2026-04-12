@@ -18,6 +18,6 @@
                  :description "Simple bar chart"
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
-         (plot (vega::%defplot 'test-jupyter-mime spec)))
+         (plot (make-plot :base spec :name 'test-jupyter-mime)))
     (assert-equalp (mime-representation plot)
                    (mime-bundle-data plot))))

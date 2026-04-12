@@ -140,7 +140,7 @@ When VERSION is supplied the gist includes a history entry."
                  :encoding (:x (:field :a :type :nominal
                                 :axis (:label-angle 0))
                             :y (:field :b :type :quantitative))))
-         (plot (vega::%defplot 'test-bar spec))
+         (plot (make-plot :base spec :name 'test-bar))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "simple-bar-chart.json"))))
     (assert-equalp expected actual)))
@@ -161,7 +161,7 @@ When VERSION is supplied the gist includes a history entry."
                             :y (:field :value :type :quantitative)
                             :x-offset (:field :group)
                             :color (:field :group))))
-         (plot (vega::%defplot 'test-grouped spec))
+         (plot (make-plot :base spec :name 'test-grouped))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "grouped-bar-chart.json"))))
     (assert-equalp expected actual)))
@@ -177,7 +177,7 @@ When VERSION is supplied the gist includes a history entry."
                  :mark :arc
                  :encoding (:theta (:field :value :type :quantitative)
                             :color (:field :category :type :nominal))))
-         (plot (vega::%defplot 'test-pie spec))
+         (plot (make-plot :base spec :name 'test-pie))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "pie-chart.json"))))
     (assert-equalp expected actual)))
@@ -193,7 +193,7 @@ When VERSION is supplied the gist includes a history entry."
                  :mark (:type :arc :inner-radius 50)
                  :encoding (:theta (:field :value :type :quantitative)
                             :color (:field :category :type :nominal))))
-         (plot (vega::%defplot 'test-donut spec))
+         (plot (make-plot :base spec :name 'test-donut))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "donut-chart.json"))))
     (assert-equalp expected actual)))
@@ -204,7 +204,7 @@ When VERSION is supplied the gist includes a history entry."
                  :mark :point
                  :encoding (:x (:field "horsepower" :type :quantitative)
                             :y (:field "miles-per-gallon" :type :quantitative))))
-         (plot (vega::%defplot 'test-url spec))
+         (plot (make-plot :base spec :name 'test-url))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "url-data-spec.json"))))
     (assert-equalp expected actual)))
@@ -214,7 +214,7 @@ When VERSION is supplied the gist includes a history entry."
   (let* ((spec '(:mark :bar
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
-         (plot (vega::%defplot 'test-string spec))
+         (plot (make-plot :base spec :name 'test-string))
          (result (vega::write-spec plot)))
     (assert-true (stringp result))))
 
@@ -223,7 +223,7 @@ When VERSION is supplied the gist includes a history entry."
   (let* ((spec '(:mark :bar
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
-         (plot (vega::%defplot 'test-schema spec))
+         (plot (make-plot :base spec :name 'test-schema))
          (parsed (parse-json (vega::write-spec plot))))
     (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
                          (values (gethash "$schema" parsed)))))
@@ -234,7 +234,7 @@ When VERSION is supplied the gist includes a history entry."
                  :description "Simple bar chart"
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
-         (plot (vega::%defplot 'test-text spec))
+         (plot (make-plot :base spec :name 'test-text))
          (expected (with-output-to-string (stream)
                      (let ((*print-escape* t))
                        (write plot :stream stream))))
@@ -246,7 +246,7 @@ When VERSION is supplied the gist includes a history entry."
   (let* ((spec '(:mark :bar
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
-         (plot (vega::%defplot 'test-vega-lite spec)))
+         (plot (make-plot :base spec :name 'test-vega-lite)))
     (assert-equalp (parse-json (vega::write-spec plot))
                    (parse-json (representation plot :vega-lite)))))
 
@@ -256,7 +256,7 @@ When VERSION is supplied the gist includes a history entry."
                  :description "Simple bar chart"
                  :data (:values #((:a "A" :b 1)))
                  :encoding (:x (:field :a) :y (:field :b))))
-         (plot (vega::%defplot 'test-mime spec))
+         (plot (make-plot :base spec :name 'test-mime))
          (bundle (mime-representation plot))
          (data (cdr bundle))
          (expected-text (representation plot :text))
@@ -657,7 +657,7 @@ When VERSION is supplied the gist includes a history entry."
                                   (:x 3 :y 15)))
                  :encoding (:x (:field :x :type :quantitative)
                             :y (:field :y :type :quantitative))))
-         (plot (vega::%defplot 'test-line spec))
+         (plot (make-plot :base spec :name 'test-line))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "line-chart.json"))))
     (assert-equalp expected actual)))
@@ -670,7 +670,7 @@ When VERSION is supplied the gist includes a history entry."
                                   (:x 3 :y 7)))
                  :encoding (:x (:field :x :type :quantitative)
                             :y (:field :y :type :quantitative))))
-         (plot (vega::%defplot 'test-scatter spec))
+         (plot (make-plot :base spec :name 'test-scatter))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "scatter-chart.json"))))
     (assert-equalp expected actual)))
@@ -683,7 +683,7 @@ When VERSION is supplied the gist includes a history entry."
                                   (:x 3 :y 15)))
                  :encoding (:x (:field :x :type :quantitative)
                             :y (:field :y :type :quantitative))))
-         (plot (vega::%defplot 'test-area spec))
+         (plot (make-plot :base spec :name 'test-area))
          (actual (parse-json (vega::write-spec plot)))
          (expected (parse-json (load-fixture "area-chart.json"))))
     (assert-equalp expected actual)))
