@@ -139,7 +139,10 @@ the public compatibility seam and by MAKE-PLOT's internal lower-level routes."
     (%make-plot-instance (%normalize-plot-name name) data base)))
 
 (defun %make-plot-from-fragments (data arguments)
-  "Construct a VEGA-PLOT from DATA plus high-level fragment ARGUMENTS."
+  "Construct a VEGA-PLOT from DATA plus high-level fragment ARGUMENTS.
+
+This is the recommended fragment-oriented authoring path used by the public
+GG and GEOM helper layers."
   (multiple-value-bind (name fragments)
       (%parse-high-level-make-plot-arguments arguments)
     (%make-plot-from-authored-base
@@ -222,6 +225,10 @@ Legacy positional low-level compatibility path:
   (make-plot name data)
   (make-plot name data spec)
 
+The high-level path is fragment-oriented: DATA is wrapped as inline values and
+the supplied fragments are merged into the resulting Vega-Lite specification.
+Construction is explicit only: MAKE-PLOT does not display or register plots.
+
 The positional low-level forms are preserved for compatibility only and are
 deprecated in favor of explicit MAKE-PLOT :BASE construction.
 Prefer explicit MAKE-PLOT :BASE construction for new lower-level code."
@@ -258,7 +265,8 @@ Prefer explicit MAKE-PLOT :BASE construction for new lower-level code."
   "Deprecated compatibility-only public wrapper over explicit MAKE-PLOT :BASE construction.
 
 Prefer MAKE-PLOT for new construction code. This function remains to preserve
-older spec-oriented call sites while the constructor center is MAKE-PLOT."
+older spec-oriented call sites while the constructor center is MAKE-PLOT.
+Like MAKE-PLOT, it constructs only: it does not display or register plots."
   ;; Start explicit runtime deprecation signaling on this compatibility seam
   ;; without changing its construction behavior.
   (unless *make-plot-from-spec-deprecation-warning-issued-p*

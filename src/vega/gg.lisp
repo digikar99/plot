@@ -1,6 +1,8 @@
 ;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Base: 10; Package: GG -*-
 ;;; Copyright (c) 2026 Symbolics Pte. Ltd. All rights reserved.
-;;; Grammar-of-graphics helpers for common Vega-Lite plot composition.
+;;; Plot-owned grammar-of-graphics fragment helpers for Vega-Lite composition.
+;;; These helpers are intended to compose through VEGA:MAKE-PLOT on the
+;;; high-level path, or through VEGA:MERGE-PLISTS for explicit :BASE assembly.
 
 (in-package #:gg)
 
@@ -91,5 +93,5 @@ PADDING: padding in pixels (number) or plist (:left :right :top :bottom)"
       ,@(when config-props `(:config ,config-props)))))
 
 (defun layer (&rest geom-plists)
-  "Wrap two or more plot fragment plists into a Vega-Lite layer spec."
+  "Wrap fragment plists into a Vega-Lite layer fragment."
   `(:layer ,(apply #'vector geom-plists)))

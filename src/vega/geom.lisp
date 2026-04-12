@@ -1,13 +1,15 @@
 ;;; -*- Mode: LISP; Syntax: Ansi-Common-Lisp; Base: 10; Package: GEOM -*-
 ;;; Copyright (c) 2026 Symbolics Pte. Ltd. All rights reserved.
-;;; Geometry helpers for common Vega-Lite plot types.
+;;; Plot-owned geometry fragment helpers for common Vega-Lite plot types.
 
 (in-package #:geom)
 
 ;;; Following the ggplot2 design, geom functions handle marks and
-;;; encodings only - they return plists that are spliced into a plot
-;;; spec via ,@. Axis titles, labels, themes, and scales are concerns
-;;; of the plot-level specification and should not be set here.
+;;; encodings only - they return plists intended to compose through
+;;; VEGA:MAKE-PLOT on the high-level path, or through VEGA:MERGE-PLISTS
+;;; for explicit :BASE construction. Axis titles, labels, themes, and
+;;; scales are concerns of the plot-level fragment layer and should not
+;;; be set here.
 ;;;
 ;;; Convention for color/shape/size parameters:
 ;;;   keyword  -> field name  -> goes into :encoding  (e.g. :origin)
