@@ -3,7 +3,7 @@
 ;;; SPDX-License-identifier: MS-PL
 
 (defsystem "plot"
-  :version     "2.0.0"
+  :version     "3.0.0"
   :licence     :MS-PL
   :author      "Steve Nunez <steve@symbolics.tech>"
   :long-name   "Common Lisp Vega Plotting"
@@ -39,7 +39,7 @@
 		(:file "stem-and-leaf")))
 
 (defsystem "plot/vega"
-  :version     "2.0.13"
+  :version     "3.0.0"
   :description "Plotting with Vega & Vega-Lite"
   :author      "Steve Nunez <steve@symbolics.tech>"
   :licence     :MS-PL
@@ -62,7 +62,6 @@
   :serial t
   :pathname    "src/vega/"
   :components ((:file "pkgdcl")
-	       (:file "gg-pkgdcl")
 	       (:file "init")
 	       (:file "data")
 	       (:file "plot")
@@ -71,6 +70,7 @@
 	       (:file "commands")
 	       (:file "utilities")
 	       (:file "gg")
+	       (:file "geom")
 	       (:file "statistics")
 	       (:file "vega-datasets"))
   :in-order-to ((test-op (test-op "plot/vega/tests"))))

@@ -643,6 +643,181 @@ When VERSION is supplied the gist includes a history entry."
              (assert-eql :line (getf (aref layers 1) :mark))))
       (setf (symbol-function 'plot:plot) original-plot-function))))
 
+(deftest geom-point-fragment-composes-through-make-plot (authoring-suite)
+  "The migrated GEOM point helper composes through plot-owned MAKE-PLOT."
+  (let* ((data #((:x 1 :y 2 :origin "A" :size 10)
+                 (:x 2 :y 3 :origin "B" :size 20)))
+         (plot (make-plot data
+                          '(:title "Geom Point")
+                          (geom:point :x :y
+                                      :color :origin
+                                      :shape "diamond"
+                                      :size :size
+                                      :opacity 0.7
+                                      :filled t
+                                      :zero-scale nil)))
+         (spec (plot-spec plot))
+         (mark (getf spec :mark))
+         (encoding (getf spec :encoding)))
+    (assert-equalp `(:values ,data) (plot-data plot))
+    (assert-equal "Geom Point" (getf spec :title))
+    (assert-eql :point (getf mark :type))
+    (assert-true (getf mark :filled))
+    (assert-equal "diamond" (getf mark :shape))
+    (assert-equal :origin (getf (getf encoding :color) :field))
+    (assert-equal :size (getf (getf encoding :size) :field))
+    (assert-equal 0.7 (getf (getf encoding :opacity) :value))
+    (assert-eql :false (getf (getf (getf encoding :x) :scale) :zero))
+    (assert-eql :false (getf (getf (getf encoding :y) :scale) :zero))))
+
+(deftest geom-line-fragment-composes-through-make-plot (authoring-suite)
+  "The migrated GEOM line helper preserves the public line fragment contract."
+  (let* ((data #((:date "2024-01-01" :price 10 :series "A" :weight 1)
+                 (:date "2024-01-02" :price 12 :series "B" :weight 2)))
+         (plot (make-plot data
+                          '(:title "Geom Line")
+                          (geom:line :date :price
+                                     :x-type :temporal
+                                     :color :series
+                                     :size :weight
+                                     :opacity 0.5
+                                     :interpolate :monotone
+                                     :point t
+                                     :aggregate :mean
+                                     :order :date)))
+         (spec (plot-spec plot))
+         (mark (getf spec :mark))
+         (encoding (getf spec :encoding)))
+    (assert-eql :line (getf mark :type))
+    (assert-true (getf mark :point))
+    (assert-eql :monotone (getf mark :interpolate))
+    (assert-eql :temporal (getf (getf encoding :x) :type))
+    (assert-eql :mean (getf (getf encoding :y) :aggregate))
+    (assert-equal :series (getf (getf encoding :color) :field))
+    (assert-equal :weight (getf (getf encoding :size) :field))
+    (assert-equal 0.5 (getf (getf encoding :opacity) :value))
+    (assert-equal :date (getf (getf encoding :order) :field))))
+
+(deftest geom-bar-and-histogram-fragments-compose-through-make-plot (authoring-suite)
+  "The migrated GEOM bar and histogram helpers preserve orientation and grouping behavior."
+  (let* ((bar-data #((:category "A" :value 10 :series "S1")
+                     (:category "B" :value 12 :series "S2")))
+         (bar-plot (make-plot bar-data
+                              (geom:bar :category :value
+                                        :orient :horizontal
+                                        :group :series
+                                        :stack :normalize
+                                        :opacity 0.4
+                                        :corner-radius-end 3)))
+         (bar-spec (plot-spec bar-plot))
+         (bar-mark (getf bar-spec :mark))
+         (bar-encoding (getf bar-spec :encoding))
+         (hist-data #((:value 1 :series "S1")
+                      (:value 2 :series "S2")))
+         (hist-plot (make-plot hist-data
+                               (geom:histogram :value
+                                               :group :series
+                                               :stack :null
+                                               :opacity 0.25
+                                               :bin-spacing 0
+                                               :corner-radius-end 5)))
+         (hist-spec (plot-spec hist-plot))
+         (hist-mark (getf hist-spec :mark))
+         (hist-encoding (getf hist-spec :encoding)))
+    (assert-eql :bar (getf bar-mark :type))
+    (assert-eql 3 (getf bar-mark :corner-radius-end))
+    (assert-eql :value (getf (getf bar-encoding :x) :field))
+    (assert-eql :normalize (getf (getf bar-encoding :x) :stack))
+    (assert-eql :category (getf (getf bar-encoding :y) :field))
+    (assert-eql :series (getf (getf bar-encoding :color) :field))
+    (assert-equal 0.4 (getf (getf bar-encoding :opacity) :value))
+    (assert-eql :bar (getf hist-mark :type))
+    (assert-eql 0 (getf hist-mark :bin-spacing))
+    (assert-eql 5 (getf hist-mark :corner-radius-end))
+    (assert-eql :value (getf (getf hist-encoding :x) :field))
+    (assert-eql :count (getf (getf hist-encoding :y) :aggregate))
+    (assert-eql :null (getf (getf hist-encoding :y) :stack))
+    (assert-eql :series (getf (getf hist-encoding :color) :field))
+    (assert-equal 0.25 (getf (getf hist-encoding :opacity) :value))))
+
+(deftest geom-box-plot-and-error-bar-fragments-compose-through-make-plot (authoring-suite)
+  "The migrated GEOM box-plot and error-bar helpers preserve category and legend behavior."
+  (let* ((box-data #((:value 10 :group "A")
+                     (:value 12 :group "B")))
+         (box-plot (make-plot box-data
+                              (geom:box-plot :value
+                                             :category :group
+                                             :opacity 0.6)))
+         (box-spec (plot-spec box-plot))
+         (box-mark (getf box-spec :mark))
+         (box-encoding (getf box-spec :encoding))
+         (error-data #((:value 10 :group "A")
+                       (:value 12 :group "B")))
+         (error-plot (make-plot error-data
+                                (geom:error-bar :value
+                                                :orient :horizontal
+                                                :category :group
+                                                :opacity 0.3
+                                                :thickness 2
+                                                :ticks t)))
+         (error-spec (plot-spec error-plot))
+         (error-mark (getf error-spec :mark))
+         (error-encoding (getf error-spec :encoding)))
+    (assert-eql :boxplot (getf box-mark :type))
+    (assert-eql 1.5 (getf box-mark :extent))
+    (assert-eql :value (getf (getf box-encoding :x) :field))
+    (assert-eql :false (getf (getf (getf box-encoding :x) :scale) :zero))
+    (assert-eql :group (getf (getf box-encoding :color) :field))
+    (assert-eql :null (getf (getf box-encoding :color) :legend))
+    (assert-equal 0.6 (getf (getf box-encoding :opacity) :value))
+    (assert-eql :errorbar (getf error-mark :type))
+    (assert-eql :stdev (getf error-mark :extent))
+    (assert-true (getf error-mark :ticks))
+    (assert-eql 2 (getf error-mark :thickness))
+    (assert-eql :value (getf (getf error-encoding :x) :field))
+    (assert-eql :group (getf (getf error-encoding :y) :field))
+    (assert-eql :group (getf (getf error-encoding :color) :field))
+    (assert-eql :null (getf (getf error-encoding :color) :legend))
+    (assert-equal 0.3 (getf (getf error-encoding :opacity) :value))))
+
+(deftest geom-and-gg-compose-through-make-plot (authoring-suite)
+  "The migrated GEOM and plot-owned GG layers compose together through MAKE-PLOT."
+  (let* ((data #((:x 1 :y 2 :group "A")
+                 (:x 2 :y 3 :group "B")))
+         (plot (make-plot data
+                          '(:title "Geom + GG Composition")
+                          (geom:point :x :y :color :group :filled t)
+                          (gg:label :x "X" :y "Y")
+                          (gg:theme :width 360 :height 220)))
+         (spec (plot-spec plot))
+         (mark (getf spec :mark))
+         (encoding (getf spec :encoding)))
+    (assert-equal "Geom + GG Composition" (getf spec :title))
+    (assert-eql :point (getf mark :type))
+    (assert-true (getf mark :filled))
+    (assert-eql :group (getf (getf encoding :color) :field))
+    (assert-equal "X" (getf (getf encoding :x) :title))
+    (assert-equal "Y" (getf (getf encoding :y) :title))
+    (assert-equal 360 (getf spec :width))
+    (assert-equal 220 (getf spec :height))))
+
+(deftest geom-fragments-do-not-display-implicitly (authoring-suite)
+  "The migrated GEOM fragment path remains construction-only and does not invoke PLOT:PLOT."
+  (let ((display-called nil)
+        (original-plot-function (symbol-function 'plot:plot)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'plot:plot)
+                 (lambda (&rest args)
+                   (declare (ignore args))
+                   (setf display-called t)
+                   :display-called))
+           (make-plot #((:x 1 :y 2))
+                      '(:title "No Display Geom")
+                      (geom:line :x :y))
+           (assert-false display-called))
+      (setf (symbol-function 'plot:plot) original-plot-function))))
+
 (deftest make-plot-unsupported-keyword-contract-fails-explicitly (commands-suite)
   "Unsupported top-level keyword contracts still fail explicitly."
   (assert-true

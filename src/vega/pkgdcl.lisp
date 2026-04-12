@@ -116,3 +116,18 @@
    #:flights-200k))
 
 
+
+(uiop:define-package #:gg
+  (:use :cl)
+  (:export #:label #:axes #:coord #:theme #:tooltip #:layer)
+  (:documentation "GG provides the plot-owned grammar-of-graphics fragment layer for labels, scales, coordinates, themes, tooltips, and layered composition."))
+
+(uiop:define-package #:geom
+  (:use :cl)
+  (:export #:histogram
+           #:bar
+           #:point
+           #:line
+           #:box-plot
+           #:error-bar)
+  (:documentation "GEOM provides the plot-owned grammar-of-graphics fragment layer for the core mark-oriented statistical plotting helpers."))
