@@ -404,6 +404,20 @@ When VERSION is supplied the gist includes a history entry."
     (assert-equalp data (plot-data p))
     (assert-equalp spec (plot-spec p))))
 
+(deftest make-plot-with-data-and-default-spec-remains-legacy-compatible (commands-suite)
+  "Legacy positional make-plot with NAME and DATA still preserves separate data/spec slots and does not auto-register."
+  (clear-plot-if-present "TEST-WITH-DATA")
+  (let* ((data '(:values #((:a 1))))
+         (p (make-plot "test-with-data" data)))
+    (unwind-protect
+         (progn
+           (assert-equal "test-with-data" (plot-name p))
+           (assert-equalp data (plot-data p))
+           (assert-equal "https://vega.github.io/schema/vega-lite/v6.json"
+                         (getf-string (plot-spec p) "$schema"))
+           (assert-false (find-plot "TEST-WITH-DATA")))
+      (clear-plot-if-present "TEST-WITH-DATA"))))
+
 (deftest make-plot-base-contract-constructs-plot (commands-suite)
   "make-plot accepts an explicit :base contract for advanced lower-level construction."
   (let* ((base '(:mark :bar

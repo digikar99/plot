@@ -157,6 +157,25 @@ the public compatibility seam and by MAKE-PLOT's internal lower-level routes."
                                        (apply #'merge-plists base overlay)
                                        base))))
 
+(defun %make-plot-from-legacy-positional (name &optional
+                                               data
+                                               (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
+  "Construct a VEGA-PLOT through the legacy positional compatibility path over explicit MAKE-PLOT :BASE construction.
+
+This preserves the old external slot shape where DATA and SPEC remain
+separate, even though construction now routes through the explicit
+advanced contract."
+  (let* ((base (if data
+                   (merge-plists spec `(:data ,data))
+                   spec))
+         (plot (make-plot :base base :name name)))
+    ;; Preserve the legacy public shape exactly: unnormalized NAME, separate
+    ;; DATA slot, and SPEC without synthesized top-level :DATA.
+    (setf (plot-name plot) name
+          (plot-data plot) data
+          (plot-spec plot) spec)
+    plot))
+
 (defun show-plots ()
   "Show all plots in the current environment"
   (loop for i = 0 then (1+ i)
@@ -196,7 +215,7 @@ Legacy positional low-level compatibility path:
                           data
                           (spec '("$schema" "https://vega.github.io/schema/vega-lite/v6.json")))
          rest
-       (%make-plot-instance first data spec)))
+       (%make-plot-from-legacy-positional first data spec)))
     (t
      (%make-plot-from-fragments first rest))))
 
