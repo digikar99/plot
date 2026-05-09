@@ -29,8 +29,7 @@
   :licence     :MS-PL
   :depends-on  ("select"
 		"num-utils"
-		"iterate"
-		"cl-spark")
+                "iterate")
   :pathname    "src/text/"
   :components  ((:file "pkgdcl")
 		(:file "histogram")
