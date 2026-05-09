@@ -49,7 +49,6 @@
 	       "let-plus"
 	       "local-time"
 	       "parenscript"
-	       "duologue"
 	       "data-frame"
 	       "select"
 	       "array-operations"
